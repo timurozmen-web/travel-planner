@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F4F5F7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Planner">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <title>Journeys Planner</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -324,6 +329,7 @@ a.lnk { color: var(--brand); font-weight: 600; text-decoration: none; font-size:
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 14px; background: #FFF4F2; font-size: 13px; }
 .dest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .dest .pill b { font-weight: 650; }
+.code { font: 650 22px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; word-break: break-all; }
 .light { position: fixed; inset: 0; z-index: 50; background: #0b0f16; display: grid; grid-template-rows: 1fr auto; }
 .light img { width: 100%; height: 100%; object-fit: contain; min-height: 0; }
 .light .lb { display: flex; gap: 8px; justify-content: center; padding: 12px var(--gr) calc(env(safe-area-inset-bottom, 0px) + 14px) var(--gl); }
@@ -671,30 +677,89 @@ const unplanned = (s) => { const inDay = new Set((s.days || []).flat()); return 
 function dayStart(t, s, d) { if (d > 0) return 9 * 60 + 30; const l = legsOf(t).find((x) => x.b.id === s.id); return l ? Math.min(17 * 60, Math.max(11 * 60, 9 * 60 + (l.time || 0) + 90)) : 11 * 60; }
 function timesFor(t, s, d) { let m = dayStart(t, s, d); const by = new Map(s.todos.map((x) => [x.id, x])); return (s.days[d] || []).map((id) => { const x = by.get(id); const st = m; m += hrsOf(x) * 60 + 30; return { x, st }; }).filter((r) => r.x); }
 
-/* ---------------- Persistence ---------------- */
+/* ---------------- Persistence ----------------
+   Inside Claude: the artifact's db (per person). On the website: localStorage, plus
+   optional cloud sync through /api/sync under a private sync code. */
 let db = null, dbRef = null, sample = null, mcp = null, assets = null, saveT = null, saveState = 'local';
+let webAI = false, webSync = false;
+const SK = 'journeys-planner-sync';
+const syncCode = () => { try { return localStorage.getItem(SK) || ''; } catch { return ''; } };
+const setSyncCode = (c) => { try { c ? localStorage.setItem(SK, c) : localStorage.removeItem(SK); } catch {} };
+const localAt = () => { try { return +(localStorage.getItem(LS + '-at') || 0); } catch { return 0; } };
+const setLocalAt = (n) => { try { localStorage.setItem(LS + '-at', String(n)); } catch {} };
+function newCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(20)); return [...r].map((b, i) => A[b % A.length] + (i % 5 === 4 && i < 19 ? '-' : '')).join(''); }
 function serial() { return JSON.stringify({ trips: S.trips, cur: S.cur, wallet: S.wallet }); }
 function save() {
   clearTimeout(saveT);
+  setLocalAt(Date.now());
   saveT = setTimeout(async () => {
     try { localStorage.setItem(LS, serial()); localStorage.setItem(LS + '-packs', JSON.stringify(S.packs)); } catch {}
     if (dbRef) {
       try { await dbRef.doc('planner').set({ json: serial(), at: Date.now() }); await dbRef.doc('packs').set({ json: JSON.stringify(S.packs), at: Date.now() }); saveState = 'synced'; } catch { saveState = 'local'; }
-      const el = $('#savest'); if (el) el.textContent = saveLabel();
-    }
+    } else if (webSync && syncCode()) await pushSync();
+    const el = $('#savest'); if (el) el.textContent = saveLabel();
   }, 600);
 }
-const saveLabel = () => saveState === 'synced' ? 'Saved to your account' : 'Saved on this device';
+const saveLabel = () => saveState === 'synced' ? 'Saved to your account' : saveState === 'cloud' ? 'Synced across your devices' : saveState === 'offline' ? 'Saved here · sync will retry' : 'Saved on this device';
+async function pushSync() {
+  const code = syncCode(); if (!code) return false;
+  try {
+    const r = await fetch('/api/sync', { method: 'PUT', headers: { 'x-sync-code': code, 'content-type': 'application/json' }, body: JSON.stringify({ json: serial(), packs: JSON.stringify(S.packs), at: localAt() || Date.now() }) });
+    saveState = r.ok ? 'cloud' : 'offline'; return r.ok;
+  } catch { saveState = 'offline'; return false; }
+}
+async function pullSync(force) {
+  const code = syncCode(); if (!code || !webSync) return 'off';
+  try {
+    const r = await fetch('/api/sync', { headers: { 'x-sync-code': code }, cache: 'no-store' });
+    if (r.status === 404) { await pushSync(); return 'pushed'; }
+    if (!r.ok) { saveState = 'offline'; return 'error'; }
+    const d = await r.json();
+    if (force || d.at > localAt()) {
+      const j = JSON.parse(d.json); if (j.trips?.length) Object.assign(S, j);
+      if (d.packs) { try { S.packs = { ...JSON.parse(d.packs), ...S.packs }; } catch {} }
+      migrate(); setLocalAt(d.at); try { localStorage.setItem(LS, serial()); } catch {}
+      saveState = 'cloud'; M.sig = ''; if (!V.play && !DR) refresh(); return 'pulled';
+    }
+    if (d.at < localAt()) await pushSync(); else saveState = 'cloud';
+    return 'same';
+  } catch { saveState = 'offline'; return 'error'; }
+}
 function loadLocal() {
   try { const j = JSON.parse(localStorage.getItem(LS) || 'null'); if (j && j.trips?.length) Object.assign(S, j); } catch {}
   try { S.packs = JSON.parse(localStorage.getItem(LS + '-packs') || '{}') || {}; } catch { S.packs = {}; }
 }
 const docData = (snap) => { if (!snap) return null; if (typeof snap.data === 'function') return snap.exists === false ? null : snap.data(); return snap; };
+const jsonOK = (r) => r.ok && (r.headers.get('content-type') || '').includes('json');
+function probeWeb() {
+  // The website's own functions. Inside Claude these paths don't exist, so the probes fail quietly.
+  fetch('/api/ai', { cache: 'no-store' }).then((r) => jsonOK(r) ? r.json() : null).then((j) => { if (j?.ok) { webAI = true; if (!sample && !V.play) refresh(); } }).catch(() => {});
+  fetch('/api/sync', { headers: { 'x-sync-code': 'PROBE-PROBE-PROBE-PROBE' }, cache: 'no-store' }).then((r) => { if ((r.headers.get('content-type') || '').includes('json')) { webSync = true; if (syncCode()) pullSync(); else if (!V.play) refresh(); } }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && webSync && syncCode() && !V.sheet) pullSync(); });
+async function askJSON(prompt, tier = 'default') {
+  if (sample) return sample.json(prompt, { modelTier: tier });
+  if (!webAI) throw new Error('Claude is not available here.');
+  const r = await fetch('/api/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: prompt + '\nReply with the JSON object only, no code fences or commentary.', tier }) });
+  if (r.status === 429) throw Object.assign(new Error('Busy'), { code: 'rate_limited' });
+  if (!r.ok) { let m = ''; try { m = (await r.json()).error; } catch {} throw new Error(m || 'Claude did not answer.'); }
+  const text = await r.text(), err = text.match(/\[\[error:([\s\S]*?)\]\]/); if (err) throw new Error('Claude: ' + err[1]);
+  const i = text.indexOf('{'), j = text.lastIndexOf('}'); if (i < 0 || j < i) throw new Error('Claude sent something unreadable. Try again.');
+  return JSON.parse(text.slice(i, j + 1));
+}
+const canAI = () => !!sample || webAI;
+const canUpload = () => !!assets || webSync;
+async function uploadBlob(blob) {
+  if (assets) { const r = await assets.upload(blob); return { id: r.id, url: r.url || '/_blob/' + r.id }; }
+  const r = await fetch('/api/upload', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-sync-code': syncCode() }, body: blob });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Upload failed'); return { id: 'w:' + j.id, url: j.url };
+}
 async function boot() {
   loadLocal();
   if (!S.trips.length) demoTrip();
   migrate(); render();
   const use = window.claude?.use ? (n) => window.claude.use(n).catch(() => null) : async () => null;
+  if (!window.claude?.use) probeWeb();
   use('sample').then((s) => { sample = s; if (!V.play) refresh(); });
   use('mcp').then((m) => { mcp = m; if (V.sheet) renderSheet(); });
   use('assets').then((a) => { assets = a; if (V.sheet) renderSheet(); });
@@ -721,7 +786,7 @@ function renderMain() {
   const tab = V.tab;
   let html = `<header class="top">
     <div style="min-width:0"><div class="eyebrow">Journeys planner</div><h1><button data-act="trips">${esc(t.name)}</button></h1><div class="save" id="savest">${saveLabel()}</div></div>
-    <div class="hb"><button class="pill" data-act="trips">Trips</button><button class="pill" data-act="wallet">Wallet</button></div>
+    <div class="hb"><button class="pill" data-act="trips">Trips</button><button class="pill" data-act="wallet">Wallet</button>${webSync ? `<button class="pill ${syncCode() ? '' : 'go'}" data-act="sync" aria-label="Sync">${syncCode() ? '⟳' : 'Sync'}</button>` : ''}</div>
   </header>
   <nav class="tabs" role="tablist">${[['route', 'Route'], ['plan', 'Plan'], ['budget', 'Budget']].map(([k, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</nav>`;
   if (tab !== 'budget') html += `<div class="mapbox" id="mapbox"><svg id="map"></svg>
@@ -768,7 +833,7 @@ function routeView(t) {
   });
   html += `</div>
   <div class="addbox"><div class="addrow"><input class="inp" id="addq" placeholder="Add a destination or stop…" autocomplete="off"><button class="pill go" data-act="addgo">Add</button></div><div class="sugg" id="addsugg"></div></div>
-  <div class="cta">${sample ? `<button class="pill" data-act="plan" ${V.busy.plan ? 'disabled' : ''}>Plan travel with Claude</button>` : ''}<button class="pill" data-act="resetlegs">Reset travel to estimates</button></div>
+  <div class="cta">${canAI() ? `<button class="pill" data-act="plan" ${V.busy.plan ? 'disabled' : ''}>Plan travel with Claude</button>` : ''}<button class="pill" data-act="resetlegs">Reset travel to estimates</button></div>
   ${V.busy.plan ? `<div class="busy">Working out the best way between each stop…</div>` : ''}${V.err.plan ? `<div class="err">${esc(V.err.plan)}</div>` : ''}
   <p class="note">Tap a stop for its day plan, hotels and things to do; tap a leg to change how you travel, use Avios or pull live fares. <span class="src">est</span> prices are rough guides; <span class="src live">live</span> come from SlickTrip.</p>`;
   return html;
@@ -1037,21 +1102,21 @@ async function suggest(q, box, act) {
   const rank = (c) => (c.guide ? 0 : 4) + (keyOf(c.name) === q ? 0 : 2) + (near.has(c.country) ? 0 : 1) + (POPULAR.has(c.country) ? 0 : 1) - Math.log10((c.pop || 1000) + 1) * 0.8;
   const hits = list.filter((c) => keyOf(c.name).startsWith(q)).sort((a, b) => rank(a) - rank(b))
     .concat(list.filter((c) => !keyOf(c.name).startsWith(q) && keyOf(c.name).includes(q)).sort((a, b) => (b.pop || 0) - (a.pop || 0))).slice(0, 8);
-  box.innerHTML = hits.map((c) => `<button type="button" data-${act}="${esc(JSON.stringify(c))}"><span>${esc(c.name)} <small>${esc(c.country)}</small></span>${c.guide ? '<span class="src claude">guide</span>' : ''}</button>`).join('') || (sample ? `<button type="button" data-${act}="${esc(JSON.stringify({ name: raw }))}"><span>Find “${esc(raw)}” with Claude</span></button>` : '');
+  box.innerHTML = hits.map((c) => `<button type="button" data-${act}="${esc(JSON.stringify(c))}"><span>${esc(c.name)} <small>${esc(c.country)}</small></span>${c.guide ? '<span class="src claude">guide</span>' : ''}</button>`).join('') || (canAI() ? `<button data-${act}="${esc(JSON.stringify({ name: raw }))}"><span>Find “${esc(raw)}” with Claude</span></button>` : '');
 }
 async function addCity(c, at) {
   const t = T(); if (!c?.name) return;
   const s = makeStop(c.name, { country: c.country, lat: c.lat, lng: c.lng, code: c.code, nights: 3 });
   if (at == null) t.stops.push(s); else t.stops.splice(at, 0, s);
   save(); renderMain(); toast(`Added ${s.city}`);
-  if (!s.hoods.length && sample) research(s.id);
+  if (!s.hoods.length && canAI()) research(s.id);
 }
 
 /* ---------------- Claude ---------------- */
 function monthOf(t, s) { const i = t.stops.indexOf(s); const d = stopDates(t)[i]?.in; return d ? new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' }) : 'any season'; }
 const claudeErr = (e, fb) => e?.code === 'not_granted' ? 'Claude was not allowed on this page.' : e?.code === 'rate_limited' ? 'Busy right now. Try again in a minute.' : (e?.message || fb);
 async function research(sid) {
-  const t = T(), s = t.stops.find((x) => x.id === sid); if (!s || !sample) return;
+  const t = T(), s = t.stops.find((x) => x.id === sid); if (!s || !canAI()) return;
   V.busy[sid] = true; V.err[sid] = ''; refresh();
   const prompt = `You are a travel researcher writing a compact city guide for a UK traveller visiting ${s.city}${s.country ? ', ' + s.country : ''} in ${monthOf(t, s)}.
 Return ONLY JSON, no prose, matching exactly:
@@ -1061,7 +1126,7 @@ Return ONLY JSON, no prose, matching exactly:
 "hotels":[{"name":string,"hood":"one of the hood names","prog":"marriott|hilton|ihg|hyatt|accor|none","cash":number,"points":number}]}
 Rules: 3-6 neighbourhoods worth basing in (1-3 for a small town) with accurate centre coordinates. 10-14 things to do, real and specific, spread across the neighbourhoods, each with its own accurate coordinates; cost is per person in GBP (0 if free). 6-10 real hotels that exist today, mixing Marriott, Hilton, IHG, Hyatt and Accor brands with good independents, across budgets; cash = typical GBP per night for a standard room; points = typical standard-room award points per night in that programme (0 for none or accor).`;
   try {
-    const p = await sample.json(prompt, { modelTier: 'default' });
+    const p = await askJSON(prompt, 'default');
     if (!p || !Array.isArray(p.hoods) || !p.hoods.length) throw new Error('Came back without neighbourhoods. Try again.');
     p.src = 'claude'; p.todos = (p.todos || []).filter((x) => x?.name).map((x) => ({ ...x, lat: +x.lat || null, lng: +x.lng || null }));
     p.hotels = (p.hotels || []).filter((x) => x?.name).map((h) => ({ ...h, prog: PROGS[h.prog] ? h.prog : progOf(h.name), cash: +h.cash || 0, points: +h.points || 0 }));
@@ -1071,7 +1136,7 @@ Rules: 3-6 neighbourhoods worth basing in (1-3 for a small town) with accurate c
   V.busy[sid] = false; refresh();
 }
 async function planLegs() {
-  const t = T(); if (!sample || !t.stops.length) return;
+  const t = T(); if (!canAI() || !t.stops.length) return;
   V.busy.plan = true; V.err.plan = ''; renderMain();
   const legs = legsOf(t), dts = legDates(t);
   const list = legs.map((l, i) => `${i + 1}. ${l.a.city}, ${l.a.country} -> ${l.b.city}, ${l.b.country} on ${dts[i] || 'flexible date'}`).join('\n');
@@ -1080,17 +1145,17 @@ Legs:
 ${list}
 Return ONLY JSON: {"legs":[{"i":1,"mode":"flight|train|drive|bus|ferry","time":number,"price":number,"note":"max 8 words"}]}`;
   try {
-    const r = await sample.json(prompt, { modelTier: 'default' });
+    const r = await askJSON(prompt, 'default');
     (r?.legs || []).forEach((x) => { const l = legs[(x.i || 0) - 1]; if (!l || !MODES.includes(x.mode)) return; t.legs[l.k] = { mode: x.mode, time: +x.time || l.time, price: +x.price || l.price, note: x.note || '', src: 'claude', pay: 'cash' }; });
     save(); toast('Travel planned');
   } catch (e) { V.err.plan = claudeErr(e, 'Could not plan the travel.'); }
   V.busy.plan = false; renderMain();
 }
 async function stopovers(k) {
-  const t = T(), l = legsOf(t).find((x) => x.k === k); if (!l || !sample) return;
+  const t = T(), l = legsOf(t).find((x) => x.k === k); if (!l || !canAI()) return;
   V.busy.ideas = true; V.ideas[k] = null; V.err.ideas = ''; renderSheet();
   try {
-    const r = await sample.json(`Suggest 3 worthwhile stopover places (a city or town, 1-3 nights) on the way from ${l.a.city}, ${l.a.country} to ${l.b.city}, ${l.b.country} for a traveller going by ${l.mode}. Return ONLY JSON: {"ideas":[{"city":string,"country":string,"lat":number,"lng":number,"why":"max 12 words"}]}`, { modelTier: 'quick' });
+    const r = await askJSON(`Suggest 3 worthwhile stopover places (a city or town, 1-3 nights) on the way from ${l.a.city}, ${l.a.country} to ${l.b.city}, ${l.b.country} for a traveller going by ${l.mode}. Return ONLY JSON: {"ideas":[{"city":string,"country":string,"lat":number,"lng":number,"why":"max 12 words"}]}`, 'quick');
     V.ideas[k] = (r?.ideas || []).filter((x) => x?.city);
   } catch (e) { V.ideas[k] = []; V.err.ideas = claudeErr(e, 'No ideas came back.'); }
   V.busy.ideas = false; renderSheet();
@@ -1133,12 +1198,13 @@ async function liveFlights(k) {
 
 /* ---------------- Photos ---------------- */
 async function addPhoto(file) {
-  const t = T(), s = t.stops.find((x) => x.id === V.sheet?.id); if (!s || !assets || !file) return;
+  const t = T(), s = t.stops.find((x) => x.id === V.sheet?.id); if (!s || !file) return;
+  if (!assets && !syncCode()) { toast('Turn on sync first — photos are stored with your synced trips'); return openSheet({ k: 'sync' }); }
   V.busy.photo = true; renderSheet();
   try {
     const blob = await shrink(file, 1800);
-    const r = await assets.upload(blob);
-    s.photos.unshift({ id: r.id, url: r.url || '/_blob/' + r.id }); save(); toast('Photo added');
+    const r = await uploadBlob(blob);
+    s.photos.unshift(r); save(); toast('Photo added');
   } catch (e) { toast(e?.message || 'Could not add that photo'); }
   V.busy.photo = false; renderSheet(); renderMain();
 }
@@ -1172,7 +1238,7 @@ function closeSheet() { V.sheet = null; V.day = null; renderSheet(); renderMain(
 function renderSheet() {
   const el = $('#sheet'), old = $('.sheet', el), y = old ? old.scrollTop : 0, key = V.sheet ? V.sheet.k + ':' + (V.sheet.id || '') : '';
   const k = V.sheet?.k;
-  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : '';
+  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : '';
   el.innerHTML = html ? `<div class="sheet"><div class="wrap">${html}</div></div>` : '';
   if (html && el.dataset.key === key) $('.sheet', el).scrollTop = y;
   el.dataset.key = key; document.body.style.overflow = html ? 'hidden' : '';
@@ -1191,7 +1257,7 @@ function stopSheet() {
   syncDays(t, s);
   const d = stopDates(t)[i], busy = V.busy[s.id], ph = coverPhoto(s), alts = s.photos.length ? [] : (photosFor(cityQ(s)) || []);
   const coverHtml = `<div class="cover has">${ph ? `<img src="${esc(ph.url)}" alt="${esc(ph.alt || s.city)}" style="${ph.color ? 'background:' + esc(ph.color) : ''}">` : `<div id="pcard" style="height:100%">${postcard(s)}</div>`}${credit(ph)}
-    <div class="cb">${assets ? `<label class="pill sm">${V.busy.photo ? 'Uploading…' : '＋ Photo'}<input type="file" accept="image/*" id="photoin" hidden></label>` : ''}<a class="pill sm" href="https://unsplash.com/s/photos/${encodeURIComponent(s.city + ' ' + (s.country || ''))}" target="_blank" rel="noopener">Unsplash ↗</a></div>
+    <div class="cb">${canUpload() ? `<label class="pill sm">${V.busy.photo ? 'Uploading…' : '＋ Photo'}<input type="file" accept="image/*" id="photoin" hidden></label>` : ''}<a class="pill sm" href="https://unsplash.com/s/photos/${encodeURIComponent(s.city + ' ' + (s.country || ''))}" target="_blank" rel="noopener">Unsplash ↗</a></div>
     <div class="ct"><h2>${esc(s.city)}</h2><div>${esc(s.country)}${d?.in ? ` · ${fmtD(d.in)} → ${fmtD(d.out)}` : ''}</div></div></div>
     ${s.photos.length > 1 ? `<div class="strip">${s.photos.map((p, j) => `<button data-photo="${j}" class="${j === 0 ? 'on' : ''}"><img src="${esc(p.url)}" alt=""></button>`).join('')}</div>` : ''}
     ${alts.length > 1 ? `<div class="strip" aria-label="Choose a cover photo">${alts.map((p, j) => `<button data-uns="${j}" class="${ph && ph.id === p.id ? 'on' : ''}" title="${esc(p.alt)} — ${esc(p.name)}"><img src="${esc(p.thumb)}" alt="${esc(p.alt)}" style="background:${esc(p.color || '#ddd')}"></button>`).join('')}</div>` : ''}`;
@@ -1202,7 +1268,7 @@ function stopSheet() {
   return `${head(`<span class="hb"><button class="pill sm" data-act="mv" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move earlier">↑</button><button class="pill sm" data-act="mv" data-d="1" ${i === t.stops.length - 1 ? 'disabled' : ''} aria-label="Move later">↓</button></span>`)}
   ${coverHtml}
   <div class="set"><span class="step"><button data-act="nights" data-d="-1" aria-label="Fewer nights">−</button><b>${s.nights}</b><button data-act="nights" data-d="1" aria-label="More nights">+</button></span><span class="lbl">nights · stop ${i + 1} of ${t.stops.length}</span>
-    ${sample ? `<button class="pill sm" data-act="research" ${busy ? 'disabled' : ''}>${s.src === 'claude' ? 'Refresh with Claude' : s.hoods.length ? 'More with Claude' : 'Research with Claude'}</button>` : ''}</div>
+    ${canAI() ? `<button class="pill sm" data-act="research" ${busy ? 'disabled' : ''}>${s.src === 'claude' ? 'Refresh with Claude' : s.hoods.length ? 'More with Claude' : 'Research with Claude'}</button>` : ''}</div>
   ${busy ? `<div class="busy">Researching ${esc(s.city)} — neighbourhoods, hotels, things to do…</div>` : ''}${V.err[s.id] ? `<div class="err">${esc(V.err[s.id])}</div>` : ''}
   ${tabs}${dayChips}${map}${body}
   <div class="label"><span>Stop</span></div>
@@ -1254,7 +1320,7 @@ function stayPane(t, s, d) {
   const guide = s.hotels.map((h, j) => ({ h, j })).filter(({ h }) => !s.hood || h.hood === s.hood), other = s.hotels.map((h, j) => ({ h, j })).filter(({ h }) => s.hood && h.hood !== s.hood);
   const hidden = cap && V.capOnly ? s.hotels.filter((h) => h.cash > cap).length : 0;
   return `<div class="label"><span>Where to base yourself</span><span class="r">Tap to set</span></div>
-  ${s.hoods.length ? `<div class="hoods">${hoods}</div>` : `<div class="card empty">${sample ? 'No guide yet. Research it with Claude for neighbourhoods and hotels.' : 'No guide for this city yet.'}</div>`}
+  ${s.hoods.length ? `<div class="hoods">${hoods}</div>` : `<div class="card empty">${canAI() ? 'No guide yet. Research it with Claude for neighbourhoods and hotels.' : 'No guide for this city yet.'}</div>`}
   <div class="label"><span>Your stay</span>${st ? '<button class="pill sm" data-act="nostay">Clear</button>' : ''}</div>
   <div class="card">${stay}</div>
   <div class="label"><span>Hotels${s.hood ? ' in ' + esc(s.hood) : ''}</span>${cap ? `<button class="tog ${V.capOnly ? 'on' : ''}" data-act="caponly"><i></i>Under ${gbp(cap)}</button>` : `<button class="pill sm ghost" data-tab="budget">Set a nightly cap</button>`}</div>
@@ -1314,7 +1380,7 @@ function legSheet() {
   ${mcp && d > 300 ? `<div class="label"><span>Live flights${date ? ' · ' + fmtD(date) : ''}</span><button class="pill sm" data-flights="${l.k}" ${V.busy['f' + l.k] ? 'disabled' : ''}>${lv ? 'Refresh' : 'Search SlickTrip'}</button></div>
     ${V.busy['f' + l.k] ? '<div class="busy">Searching fares…</div>' : ''}${V.err['f' + l.k] ? `<div class="err">${esc(V.err['f' + l.k])}</div>` : ''}
     ${lv ? `<div class="card"><div class="hgroup"><span>${lv.list.length} cheapest · ${CABINS[t.cabin]}</span>${lv.url ? `<a class="lnk" href="${esc(lv.url)}" target="_blank" rel="noopener">SlickTrip ↗</a>` : ''}</div>${lv.list.map((f, j) => `<button class="hrow" data-fl="${j}"><div style="min-width:0"><div class="n">${esc(f.airline)}</div><div class="m">${esc(f.stops)}${f.mins ? ' · ' + hm(f.mins) : ''}${f.best.map((b) => ` <span class="src live">${esc(b.replace(/_/g, ' '))}</span>`).join('')}</div><div class="m">${esc(f.times)}</div></div><div class="p">${gbp(f.price)}<small>total</small></div></button>`).join('') || '<div class="empty">No fares came back.</div>'}</div>` : ''}` : ''}
-  ${sample ? `<div class="label"><span>Break up the journey</span><button class="pill sm" data-act="ideas" ${V.busy.ideas ? 'disabled' : ''}>${ideas ? 'More ideas' : 'Suggest stopovers'}</button></div>
+  ${canAI() ? `<div class="label"><span>Break up the journey</span><button class="pill sm" data-act="ideas" ${V.busy.ideas ? 'disabled' : ''}>${ideas ? 'More ideas' : 'Suggest stopovers'}</button></div>
     ${V.busy.ideas ? '<div class="busy">Looking for good places to stop…</div>' : ''}
     ${ideas ? `<div class="card">${ideas.map((x, j) => `<div class="idea"><span><b>${esc(x.city)}</b><small>${esc(x.country)} · ${esc(x.why || '')}</small></span><button class="pill sm go" data-idea="${j}">Add stop</button></div>`).join('') || `<div class="empty">${esc(V.err.ideas || 'No ideas this time.')}</div>`}</div>` : ''}` : ''}`;
 }
@@ -1355,7 +1421,23 @@ function tripsSheet() {
   <label class="field" style="margin-top:12px"><span>This trip's name</span><input class="inp" id="tname" value="${esc(t.name)}"></label>
   <div class="label"><span>All trips</span></div>
   <div class="card">${S.trips.map((x) => { const tt = totals(x); return `<button class="trow ${x.id === t.id ? 'on' : ''}" data-trip="${x.id}"><span><b>${esc(x.name)}</b><small>${x.stops.map((s) => esc(s.city)).join(' → ') || 'No stops yet'}${x.start ? ' · ' + fmtD(x.start) : ''}</small></span><span style="text-align:right"><b>${gbp(tt.cash)}</b><small>${tt.nights} nights${x.budget ? ' · ' + (tt.cash > x.budget ? 'over' : 'in') + ' budget' : ''}</small></span></button>`; }).join('')}</div>
+  <div class="label"><span>Move trips between versions</span></div>
+  <div class="card pad"><p class="note" style="margin:0 0 10px">Copy your trips here, then paste them into the planner in Claude or on the website.</p>
+    <div class="cta" style="margin-top:0"><button class="pill" data-act="export">Copy all trips</button></div>
+    <form id="importform" style="margin-top:12px;display:grid;gap:8px"><textarea class="inp" id="importq" rows="3" placeholder="Paste trips copied from the other version" style="font-size:13px;resize:vertical"></textarea><div><button class="pill go">Import</button></div></form></div>
   <div class="cta"><button class="pill" data-act="dup">Duplicate this trip</button>${S.trips.length > 1 ? (V.confirm === 'deltrip' ? `<button class="pill go" data-act="deltrip">Delete “${esc(t.name)}”</button><button class="pill" data-act="noconfirm">Cancel</button>` : `<button class="pill" data-act="askdeltrip">Delete this trip</button>`) : ''}</div>`;
+}
+function syncSheet() {
+  const code = syncCode();
+  return `${head()}<div class="stitle">Sync</div><div class="ssub">Keep your trips the same on your phone, laptop and anywhere else you open this planner.</div>
+  ${code ? `<div class="label"><span>Your sync code</span></div>
+  <div class="card pad"><div class="code">${esc(code)}</div><p class="note" style="margin-top:8px">Enter this code on another device to see the same trips. Anyone with the code can see and change them, so keep it to yourself.</p>
+  <div class="cta"><button class="pill go" data-act="copycode">Copy code</button><button class="pill" data-act="syncnow" ${V.busy.sync ? 'disabled' : ''}>${V.busy.sync ? 'Syncing…' : 'Sync now'}</button><button class="pill ghost" data-act="syncoff">Stop syncing here</button></div></div>`
+  : `<div class="card pad"><p style="margin:0 0 10px">Turn on sync to back up your trips and use them on more than one device. Photos you upload are stored with them.</p><button class="pill go" data-act="syncon">Turn on sync</button></div>
+  <div class="label"><span>Already have a code?</span></div>
+  <form class="addrow" id="syncform"><input class="inp" id="syncq" placeholder="ABCDE-FGHIJ-KLMNO-PQRST" autocomplete="off" autocapitalize="characters"><button class="pill go">Connect</button></form>
+  <p class="note">Connecting replaces the trips on this device with the ones saved under that code.</p>`}
+  ${V.err.sync ? `<div class="err">${esc(V.err.sync)}</div>` : ''}`;
 }
 function walletSheet() {
   const t = T(), tot = totals(t);
@@ -1378,7 +1460,7 @@ async function buildTrip(D) {
   if (t.budget) { t.hotelCap = suggestCap(t); t.stops.forEach((s) => { s.stay = null; pickStay(s, t, t.hotelCap); }); }
   migrate(); save(); M.sig = '';
   V.sheet = null; V.tab = 'route'; render(); toast('Trip built — tap a stop to plan its days');
-  if (sample) t.stops.filter((s) => !s.hoods.length).forEach((s) => research(s.id));
+  if (canAI()) t.stops.filter((s) => !s.hoods.length).forEach((s) => research(s.id));
 }
 
 /* ---------------- Events ---------------- */
@@ -1444,11 +1526,17 @@ document.addEventListener('click', (e) => {
     case 'dup': { const c = JSON.parse(JSON.stringify(t)); c.id = uid(); c.name = t.name + ' (copy)'; S.trips.unshift(c); S.cur = c.id; save(); return renderSheet(); }
     case 'askdeltrip': V.confirm = 'deltrip'; return renderSheet();
     case 'deltrip': S.trips = S.trips.filter((x) => x.id !== t.id); S.cur = S.trips[0]?.id; save(); M.sig = ''; return closeSheet();
+    case 'sync': V.err.sync = ''; return openSheet({ k: 'sync' });
+    case 'syncon': setSyncCode(newCode()); V.busy.sync = true; renderSheet(); pushSync().then((ok) => { V.busy.sync = false; if (!ok) V.err.sync = 'Could not reach the sync service. Your trips are still saved here.'; renderSheet(); renderMain(); }); return;
+    case 'syncnow': V.busy.sync = true; renderSheet(); pullSync().then((r) => { V.busy.sync = false; V.err.sync = r === 'error' ? 'Could not reach the sync service.' : ''; renderSheet(); if (r !== 'error') toast('Up to date'); }); return;
+    case 'syncoff': setSyncCode(''); saveState = 'local'; renderSheet(); renderMain(); return toast('Sync turned off on this device. Your saved copy is kept under the code.');
+    case 'copycode': navigator.clipboard?.writeText(syncCode()).then(() => toast('Code copied'), () => toast(syncCode())); return;
+    case 'export': navigator.clipboard?.writeText(JSON.stringify({ journeysPlanner: 1, trips: S.trips, packs: S.packs })).then(() => toast(`Copied ${S.trips.length} trip${S.trips.length === 1 ? '' : 's'}`), () => toast('Copy was blocked by the browser')); return;
     case 'lclose': V.light = null; return renderLight();
     case 'lprev': V.light.i--; return renderLight();
     case 'lnext': V.light.i++; return renderLight();
     case 'lcover': { const s = t.stops.find((x) => x.id === V.light.sid); const [p] = s.photos.splice(V.light.i, 1); s.photos.unshift(p); V.light = null; save(); renderMain(); return renderSheet(); }
-    case 'ldel': { const s = t.stops.find((x) => x.id === V.light.sid); const [p] = s.photos.splice(V.light.i, 1); if (assets && p?.id) assets.delete(p.id).catch(() => {}); V.light = null; save(); renderMain(); return renderSheet(); }
+    case 'ldel': { const s = t.stops.find((x) => x.id === V.light.sid); const [p] = s.photos.splice(V.light.i, 1); if (assets && p?.id && !String(p.id).startsWith('w:')) assets.delete(p.id).catch(() => {}); V.light = null; save(); renderMain(); return renderSheet(); }
   }
 });
 function syncDraft() { const D = V.draft; if (!D) return; const g = (id) => $('#' + id)?.value; D.name = g('nname') ?? D.name; D.start = g('nstart') ?? D.start; D.nights = Math.max(1, num(g('nnights')) || D.nights); D.trav = Math.max(1, Math.min(9, num(g('ntrav')) || D.trav)); D.rooms = Math.max(1, num(g('nrooms')) || D.rooms); D.budget = num(g('nbudget') ?? D.budget); D.cabin = g('ncabin') ?? D.cabin; }
@@ -1487,6 +1575,22 @@ document.addEventListener('submit', (e) => {
   e.preventDefault(); const t = T();
   if (e.target.id === 'todoform') { const s = t.stops.find((x) => x.id === V.sheet?.id), v = $('#todoq').value.trim(); if (s && v) { const x = { id: uid(), name: v, hood: s.hood, type: '', hours: 1.5, cost: 0, keep: true, custom: true, lat: null, lng: null }; s.todos.unshift(x); if (s.days) s.days[0].push(x.id); save(); renderSheet(); } }
   if (e.target.id === 'legform') { const k = V.sheet.id, l = legsOf(t).find((x) => x.k === k); const [hh, mm] = $('#lgt').value.split(':'); const time = (+hh || 0) * 60 + (+mm || 0); const { a, b, i, k: kk, ...rest } = l; t.legs[k] = { ...rest, time: time || l.time, price: num($('#lgp').value), note: $('#lgn').value.trim(), src: 'custom' }; save(); renderSheet(); toast('Saved'); }
+  if (e.target.id === 'syncform') {
+    const code = $('#syncq').value.trim().toUpperCase().replace(/\s+/g, '');
+    if (!/^[A-Z0-9-]{16,64}$/.test(code)) { V.err.sync = 'That doesn\'t look like a sync code.'; return renderSheet(); }
+    setSyncCode(code); V.busy.sync = true; renderSheet();
+    pullSync(true).then((r) => { V.busy.sync = false; V.err.sync = r === 'error' ? 'Could not reach the sync service.' : ''; if (r === 'pulled') { toast('Trips loaded from your other device'); closeSheet(); } else renderSheet(); });
+    return;
+  }
+  if (e.target.id === 'importform') {
+    try {
+      const j = JSON.parse($('#importq').value.trim()); const list = Array.isArray(j) ? j : j.trips; if (!Array.isArray(list) || !list.length) throw 0;
+      let added = 0; list.forEach((x) => { if (!x?.id || !Array.isArray(x.stops)) return; const i = S.trips.findIndex((y) => y.id === x.id); if (i >= 0) S.trips[i] = x; else S.trips.push(x); added++; });
+      if (j.packs && typeof j.packs === 'object') S.packs = { ...j.packs, ...S.packs };
+      CITIES = null; migrate(); save(); renderSheet(); renderMain(); toast(`Imported ${added} trip${added === 1 ? '' : 's'}`);
+    } catch { toast('That paste isn\'t a trip export'); }
+    return;
+  }
   if (e.target.id === 'newform') { syncDraft(); if (V.draft.dests.length) buildTrip(V.draft); }
 });
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (!DR && !V.play) { if (V.sheet?.k === 'stop') drawCityMap(); else drawMap(); } }, 200); });

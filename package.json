@@ -1,0 +1,9 @@
+{
+  "name": "travel-planner",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "@netlify/blobs": "^11.1.9"
+  }
+}

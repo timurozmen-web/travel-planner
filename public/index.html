@@ -258,6 +258,16 @@ button.lnk { background: none; border: 0; padding: 0; color: var(--brand); font-
 .srow.aw > span:first-child { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .srow .okt { color: var(--ok); font-weight: 600; }
 .av { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #1B365D; color: #fff; font: 700 9px/1 var(--f); flex: none; }
+.watch { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.watch b { display: block; font: 600 14px/1.25 var(--f); }
+.watch small { display: block; color: var(--ink2); font-size: 12px; margin-top: 2px; }
+.tbl.cmp td, .tbl.cmp th { text-align: right; white-space: normal; }
+.tbl.cmp td:first-child { color: var(--ink2); font-weight: 500; width: 30%; }
+.tbl.cmp th { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--ink); }
+.tbl.cmp td.win { color: var(--ok); font-weight: 650; }
+.cstop { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.cstop:last-child { border-bottom: 0; }
+.cstop small { color: var(--ink2); font-size: 12px; }
 .src.ok { background: var(--ok-soft); color: var(--ok); }
 .todo .tw { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .tthumb { flex: none; width: 54px; height: 54px; border-radius: 9px; overflow: hidden; }
@@ -936,7 +946,7 @@ function save() {
     const el = $('#savest'); if (el) el.textContent = saveLabel();
   }, 600);
 }
-const saveLabel = () => saveState === 'synced' ? 'Saved to your account' : saveState === 'cloud' ? 'Synced across your devices' : saveState === 'offline' ? 'Saved here · sync will retry' : 'Saved on this device';
+const saveLabel = () => !navigator.onLine && !window.claude?.use ? 'Offline · changes saved here' : saveState === 'synced' ? 'Saved to your account' : saveState === 'cloud' ? 'Synced across your devices' : saveState === 'offline' ? 'Saved here · sync will retry' : 'Saved on this device';
 async function pushSync() {
   const code = syncCode(); if (!code) return false;
   try {
@@ -1039,7 +1049,41 @@ function saveSharedCopy() {
   location.href = location.origin + location.pathname;
 }
 
+/* ---------------- Offline (website): service worker + "Save for offline" ---------------- */
+function registerSW() {
+  if (window.claude?.use || !('serviceWorker' in navigator) || !/^https:|^http:\/\/localhost/.test(location.href)) return;
+  navigator.serviceWorker.register('/sw.js').then(() => { V.swReady = true; }).catch(() => {});
+  addEventListener('online', () => { const el = $('#savest'); if (el) el.textContent = saveLabel(); if (webSync && syncCode()) pushSync().then(() => { const e2 = $('#savest'); if (e2) e2.textContent = saveLabel(); }); });
+  addEventListener('offline', () => { const el = $('#savest'); if (el) el.textContent = saveLabel(); });
+}
+function offlineUrls(t) {
+  const urls = new Set(['/', '/index.html', 'cities.json', 'countries-50m.json', 'manifest.json']);
+  [t.home, ...t.stops].forEach((s) => { if (s.lat == null) return; const pts = [s, ...s.hoods, ...s.todos.filter((x) => x.lat != null)];
+    pts.forEach((p) => { const x = Math.floor(p.lng / 15) * 15, y = Math.floor(p.lat / 15) * 15; urls.add(`tiles/${x}_${y}.json`); }); });
+  const dates = stopDates(t);
+  t.stops.forEach((s, i) => {
+    if (s.lat != null && dates[i]?.in) { const last = dayAdd(dates[i].out, -1) < dates[i].in ? dates[i].in : dayAdd(dates[i].out, -1); urls.add(`/api/weather?lat=${s.lat}&lng=${s.lng}&start=${dates[i].in}&end=${last}`); }
+    urls.add('/api/photos?q=' + encodeURIComponent(cityQ(s)));
+    const cp = coverPhoto(s); if (cp?.url) urls.add(cp.url); if (cp?.thumb) urls.add(cp.thumb);
+    s.todos.filter((x) => x.keep && !x.custom).forEach((x) => { const p = todoPhoto(s, x, false); if (p?.thumb) urls.add(p.thumb); });
+    (s.photos || []).forEach((p) => urls.add(p.url));
+  });
+  urls.add('/api/fx');
+  (t.notes?.docs || []).forEach((d) => urls.add(d.url));
+  return [...urls];
+}
+async function saveOffline(t) {
+  if (!V.swReady) return toast('Offline mode works on the website version');
+  const urls = offlineUrls(t); let done = 0, failed = 0;
+  V.busy.offline = `0 / ${urls.length}`; renderMain();
+  const queue = [...urls];
+  await Promise.all(Array.from({ length: 4 }, async () => { while (queue.length) { const u = queue.shift(); try { const r = await fetch(u, { cache: 'reload', mode: /^https?:/.test(u) && !u.startsWith(location.origin) ? 'no-cors' : 'same-origin' }); if (!r.ok && r.type !== 'opaque') failed++; } catch { failed++; } done++; V.busy.offline = `${done} / ${urls.length}`; const el = $('#offprog'); if (el) el.textContent = V.busy.offline; } }));
+  t.offlineAt = Date.now(); save(); V.busy.offline = null; renderMain();
+  toast(failed ? `Saved for offline (${failed} item${failed === 1 ? '' : 's'} couldn't be fetched)` : 'Saved for offline');
+}
+
 async function boot() {
+  registerSW();
   const sid = new URLSearchParams(location.search).get('trip');
   if (sid) return bootShared(sid);
   loadLocal();
@@ -1215,6 +1259,7 @@ function notesView(t) {
   <div class="label"><span>Documents</span>${canUpload() ? `<label class="pill sm">${V.busy.doc ? 'Uploading…' : '＋ Add'}<input type="file" accept="application/pdf,image/*" id="docin" hidden></label>` : ''}</div>
   <div class="card">${canUpload() ? `<div class="pfix"><span>Attach next upload to</span><select class="inp sm" id="doclink" style="margin-left:auto;max-width:210px">${links.map(([k, n]) => `<option value="${esc(k)}" ${V.docLink === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : ''}${docsList(t)}</div>
   ${!canUpload() ? '<p class="note">Documents need the Claude version or sync turned on.</p>' : ''}
+  ${!window.claude?.use ? `<div class="label"><span>Offline</span></div><div class="card pad"><p style="margin:0 0 10px">Save this trip's maps, weather, rates, photos and documents to this phone so the Today view works without signal.</p><button class="pill go" data-act="offline" ${V.busy.offline ? 'disabled' : ''}>${V.busy.offline ? `Saving… <span id="offprog">${V.busy.offline}</span>` : t.offlineAt ? 'Update offline copy' : 'Save for offline'}</button>${t.offlineAt ? `<p class="note">Last saved ${new Date(t.offlineAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. Your trips themselves are always kept on this device.</p>` : ''}</div>` : ''}
   <div class="label"><span>Trip notes</span></div>
   <textarea class="inp" id="tripnote" rows="5" placeholder="Anything worth remembering: addresses, who's booking what, restaurant reservations…">${esc(N.text || '')}</textarea>`;
 }
@@ -1249,10 +1294,11 @@ function todayView(t) {
   const dates = stopDates(t), legs = legsOf(t), ldates = legDates(t), end = tripEnd(t);
   const pv = `<div class="pvbar"><label class="lbl">${real ? 'Preview a day' : 'Previewing'} <input class="inp sm" type="date" id="pvdate" min="${dayAdd(t.start, -1)}" max="${end}" value="${iso}"></label>${real ? '' : '<button class="pill sm" data-act="pvoff">Back to today</button>'}</div>`;
   const legCard = (l, i, label) => { const dep = toMin(l.dep); return `<button class="tcard" data-leg="${l.k}"><span class="ic ${l.mode}">${ICON[l.mode]}</span><span class="tc"><small>${label}${real && dep != null && ldates[i] === iso ? ' · ' + until(dep - nowMin) : ''}</small><b>${MODE_NAME[l.mode]} ${esc(l.a.city)} → ${esc(l.b.city)}${l.num ? ' · ' + esc(l.num) : ''}</b><span>${l.dep ? esc(l.dep) + (l.arr ? ' → ' + esc(l.arr) + (l.arrDay ? ' +' + l.arrDay : '') : '') : hm(l.time)}${l.ref ? ' · ref <b>' + esc(l.ref) + '</b>' : ''}${l.booked ? ' · ✓ booked' : ' · not booked'}</span></span></button>`; };
+  const offTip = !window.claude?.use && !t.offlineAt && V.swReady ? `<button class="tcard" data-act="offline"><span class="ic">↓</span><span class="tc"><small>Before you fly</small><b>Save this trip for offline</b><span>Maps, weather, photos and documents without signal</span></span></button>` : '';
   if (iso < t.start) {
     const n = Math.round((Date.parse(t.start) - Date.parse(iso)) / 864e5), first = legs[0], due = t.notes.reminders.filter((r) => !r.done).sort((x, y) => String(x.due || '9').localeCompare(String(y.due || '9')));
     return `${pv}<div class="hero"><small>${esc(t.name)}</small><b>${n === 1 ? 'Tomorrow' : n + ' days to go'}</b><span>${fmtD(t.start)} · ${t.stops.map((s) => esc(s.city)).join(' → ')}</span></div>
-      ${first ? `<div class="label"><span>First up</span></div>${legCard(first, 0, fmtD(t.start))}` : ''}
+      ${first ? `<div class="label"><span>First up</span></div>${legCard(first, 0, fmtD(t.start))}` : ''}${offTip}
       ${due.length ? `<div class="label"><span>Before you go</span><button class="pill sm ghost" data-tab="notes">All notes ›</button></div><div class="card">${due.slice(0, 5).map((r) => `<div class="pfix"><span class="ck2"></span><span><b>${esc(r.text)}</b>${r.due ? ` · <span class="${r.due < iso ? 'late' : ''}">${fmtD(r.due)}</span>` : ''}</span></div>`).join('')}</div>` : ''}
       ${t.stops[0] ? (() => { const w = wxSum(t, t.stops[0], 0); return w ? `<div class="label"><span>Weather in ${esc(t.stops[0].city)}</span></div><div class="wxbar" style="margin-top:0"><span class="wxbig">${wxIcon({ wet: w.wet / Math.max(1, w.n), rain: w.rain })} ${Math.round(w.hi)}°<i>/${Math.round(w.lo)}°</i></span><span><b>${w.kind === 'forecast' ? 'Forecast' : 'Typical for your dates'}</b><small>${w.wet ? `Rain likely on ~${w.wet} of ${w.n} days` : 'Mostly dry'}</small></span></div>` : ''; })() : ''}`;
   }
@@ -1638,7 +1684,7 @@ async function liveFlights(k) {
     if (p?.status && p.status !== 'ok') throw new Error(p.message || p.error || 'SlickTrip: ' + p.status);
     V.live[k] = { at: Date.now(), url: p.search_url, date, list: (p.itineraries || []).map((x) => {
       const o = x.outbound || '', parts = o.split('|').map((s) => s.trim()), dur = [...o.matchAll(/(\d+)h(\d+)/g)].pop();
-      return { price: x.total_gbp ?? x.total ?? 0, mins: dur ? +dur[1] * 60 + +dur[2] : null, airline: parts[0] || 'Flight', times: parts[1] || '', stops: /nonstop|direct/i.test(o) ? 'Nonstop' : (o.match(/\d stops?(?: via [A-Z, ]+)?/) || [''])[0], best: x.best_for || [] };
+      return { id: x.itinerary_id, price: x.total_gbp ?? x.total ?? 0, mins: dur ? +dur[1] * 60 + +dur[2] : null, airline: parts[0] || 'Flight', times: parts[1] || '', stops: /nonstop|direct/i.test(o) ? 'Nonstop' : (o.match(/\d stops?(?: via [A-Z, ]+)?/) || [''])[0], best: x.best_for || [] };
     }) };
   } catch (e) { V.err['f' + k] = mcpErr(e); }
   V.busy['f' + k] = false; renderSheet();
@@ -1651,6 +1697,66 @@ function flightTimes(f) {
   if (m.length < 2) return { num };
   const days = Math.round((new Date(m[1][1]) - new Date(m[0][1])) / 864e5);
   return { num, dep: m[0][2], arr: m[1][2], arrDay: Math.max(0, Math.min(2, days)) };
+}
+
+/* ---------------- Price alerts (SlickTrip watches; Claude version) ---------------- */
+const pickId = (p, keys) => { for (const k of keys) { if (p?.[k]) return p[k]; } for (const v of Object.values(p || {})) if (v && typeof v === 'object' && !Array.isArray(v)) { const r = pickId(v, keys); if (r) return r; } return null; };
+async function watchItem(kind, t, target, wantTarget) {
+  V.busy.watch = true; V.err.watch = ''; renderSheet();
+  try {
+    const usdTarget = wantTarget ? Math.max(1, Math.round(wantTarget / FX)) : null;
+    let p;
+    if (kind === 'hotel') {
+      const st = target.stay; p = payloadOf(await mcp.callTool('SlickTrip', 'track_hotel', { search_key: st.sk, hotel_id: st.hid, currency: 'GBP', ...(st.su ? { search_url: st.su } : {}), ...(usdTarget ? { target_price_usd: usdTarget } : { alert_rule: 'lowest' }) }));
+    } else {
+      p = payloadOf(await mcp.callTool('SlickTrip', 'track_flight', { itinerary_id: target.itin, currency: 'GBP', ...(usdTarget ? { target_price_usd: usdTarget } : { alert_rule: 'lowest' }) }));
+    }
+    if (p?.status === 'sign_in_required') throw new Error('Sign in to SlickTrip to set up price alerts (watches need a free account).');
+    if (p?.status && !/^(ok|tracking|created|updated|already|watching)/i.test(p.status)) throw new Error(p.message || p.note || 'SlickTrip: ' + p.status);
+    const w = { at: Date.now(), target: wantTarget || null, tracking: pickId(p, ['tracking_id']), key: pickId(p, ['search_key']), fid: pickId(p, ['fid']), note: p?.note || '' };
+    if (kind === 'hotel') target.stay.watch = w; else { const l = target; const { a, b, i, k, ...rest } = l; t.legs[l.k] = { ...rest, watch: w }; }
+    save(); toast('Watching — SlickTrip will email you if the price drops');
+  } catch (e) { V.err.watch = e?.code === 'tool_error' && /sign/i.test(e.message || '') ? 'Sign in to SlickTrip to set up price alerts.' : mcpErr(e); }
+  V.busy.watch = false; renderSheet();
+}
+async function unwatchItem(kind, t, target) {
+  const w = kind === 'hotel' ? target.stay.watch : target.watch; if (!w) return;
+  V.busy.watch = true; renderSheet();
+  try {
+    if (kind === 'hotel' && w.tracking) await mcp.callTool('SlickTrip', 'stop_tracking_hotel', { tracking_id: w.tracking, hotel_id: target.stay.hid });
+    else if (kind === 'flight' && w.key) await mcp.callTool('SlickTrip', 'stop_tracking_flight', { search_key: w.key, ...(w.fid ? { fid: w.fid } : {}) });
+    else { V.busy.watch = false; V.err.watch = 'Stop this one from your SlickTrip account (the watch ID wasn\'t returned).'; return renderSheet(); }
+    if (kind === 'hotel') delete target.stay.watch; else { const { a, b, i, k, ...rest } = target; delete rest.watch; t.legs[target.k] = rest; }
+    save(); toast('Stopped watching');
+  } catch (e) { V.err.watch = mcpErr(e); }
+  V.busy.watch = false; renderSheet();
+}
+function watchBox(kind, t, target) {
+  if (!mcp) return '';
+  const w = kind === 'hotel' ? target.stay?.watch : target.watch, can = kind === 'hotel' ? target.stay?.sk && target.stay?.hid : target.itin;
+  const price = kind === 'hotel' ? (target.stay?.cash || 0) * target.nights * (target.rooms || t.rooms || 1) : target.price;
+  if (!can && !w) return `<p class="note">${kind === 'hotel' ? 'Pick this hotel from Live prices' : 'Pick a fare from Live flights'} to set up a price alert.</p>`;
+  return `<div class="watch">${w ? `<span><b>🔔 Watching${w.target ? ' for under ' + gbp(w.target) : ' for a new low'}</b><small>Since ${new Date(w.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · SlickTrip emails you when it drops</small></span><button class="pill sm" data-unwatch="${kind}" ${V.busy.watch ? 'disabled' : ''}>Stop</button>`
+    : `<span><b>Price alert</b><small>Now ${gbp(price)} total. Get an email if it drops.</small></span><span class="hb"><button class="pill sm" data-watch="${kind}" data-tgt="0" ${V.busy.watch ? 'disabled' : ''}>Any new low</button><button class="pill sm" data-watch="${kind}" data-tgt="${Math.round(price * 0.9)}" ${V.busy.watch ? 'disabled' : ''}>Under ${gbp(price * 0.9)}</button></span>`}</div>
+  ${V.busy.watch ? '<div class="busy">Talking to SlickTrip…</div>' : ''}${V.err.watch ? `<div class="err">${esc(V.err.watch)}</div>` : ''}`;
+}
+async function loadWatches() {
+  if (!mcp) return; V.busy.watches = true; V.err.watches = ''; renderSheet();
+  try { V.watches = payloadOf(await mcp.callTool('SlickTrip', 'check_my_watches', { currency: 'GBP', since_hours: 168 })); }
+  catch (e) { V.err.watches = mcpErr(e); }
+  V.busy.watches = false; renderSheet();
+}
+function watchesSheet() {
+  const p = V.watches;
+  const rows = []; const walk = (o, depth = 0) => { if (!o || depth > 3) return; if (Array.isArray(o)) return o.forEach((x) => walk(x, depth + 1)); if (typeof o !== 'object') return;
+    const name = o.name || o.route || o.title || o.hotel_name || o.label; const price = Object.entries(o).find(([k, v]) => /(current|now|latest|price).*gbp|_gbp$/.test(k) && typeof v === 'number');
+    if (name && price) rows.push({ name, price: price[1], change: o.change_gbp ?? o.drop_gbp ?? null, low: o.is_new_low || o.new_low, url: o.url || o.search_url || o.hotel_url });
+    Object.values(o).forEach((v) => typeof v === 'object' && walk(v, depth + 1)); };
+  walk(p);
+  return `${head()}<div class="stitle">Price alerts</div><div class="ssub">Everything you're watching on SlickTrip, from the last 7 days.</div>
+  <div class="cta"><button class="pill" data-act="watches" ${V.busy.watches ? 'disabled' : ''}>${V.busy.watches ? 'Checking…' : 'Refresh'}</button></div>
+  ${V.err.watches ? `<div class="err">${esc(V.err.watches)}</div>` : ''}
+  ${p ? `<div class="card" style="margin-top:12px">${rows.length ? rows.map((r) => `<div class="srow aw"><span><span><b>${esc(r.name)}</b><small>${r.change != null ? (r.change < 0 ? '▼ ' + gbp(-r.change) : '▲ ' + gbp(r.change)) + ' · ' : ''}${r.low ? 'new low · ' : ''}now ${gbp(r.price)}</small></span></span>${r.url ? `<a class="pill sm" href="${esc(r.url)}" target="_blank" rel="noopener">Open ↗</a>` : ''}</div>`).join('') : `<div class="empty">${esc(p.note || p.summary || (p.status === 'no_watches' ? 'You are not watching anything yet.' : 'No changes in the last week.'))}</div>`}</div>` : ''}`;
 }
 
 /* ---------------- Rooms ---------------- */
@@ -1727,7 +1833,7 @@ function closeSheet() { V.sheet = null; V.day = null; renderSheet(); renderMain(
 function renderSheet() {
   const el = $('#sheet'), old = $('.sheet', el), y = old ? old.scrollTop : 0, key = V.sheet ? V.sheet.k + ':' + (V.sheet.id || '') : '';
   const k = V.sheet?.k;
-  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : k === 'share' ? shareSheet() : k === 'cal' ? calSheet() : '';
+  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : k === 'share' ? shareSheet() : k === 'cal' ? calSheet() : k === 'compare' ? compareSheet() : k === 'watches' ? watchesSheet() : '';
   el.innerHTML = html ? `<div class="sheet"><div class="wrap">${html}</div></div>` : '';
   if (html && el.dataset.key === key) $('.sheet', el).scrollTop = y;
   el.dataset.key = key; document.body.style.overflow = html ? 'hidden' : '';
@@ -1816,7 +1922,7 @@ function stayPane(t, s, d) {
       <div class="split" style="border-top:1px dashed var(--line2)"><button class="tog ${st.booked ? 'on' : ''}" data-act="staybooked"><i></i>Booked</button><input class="inp sm" id="stayref" value="${esc(st.ref || '')}" placeholder="Confirmation number" autocapitalize="characters" style="flex:1;min-width:140px"></div>${isP && st.pay !== 'points' && c.earn ? `<div class="hm" style="margin-top:2px">Earns about <b>${kpts(c.earn)}</b> ${esc(PROGS[st.prog].name)} points</div>` : ''}</div>`;
   }
   const lv = V.live[s.id];
-  const rooms = roomPane(t, s);
+  const rooms = roomPane(t, s) + (st ? `<div class="label"><span>Price alert</span></div>${watchBox('hotel', t, s)}` : '');
   const row = (h, key, live) => { const on = st && st.name === h.name, over = cap && h.cash > cap, pts = PROGS[h.prog] ? ptsFor(h) : 0;
     if (over && V.capOnly && !on) return '';
     return `<button class="hrow ${on ? 'on' : ''} ${over ? 'over' : ''}" data-hotel="${key}"><div style="min-width:0"><div class="n">${esc(h.name)}</div><div class="m">${logo(h.prog)}${live ? `${h.stars ? h.stars + '★' : ''}${h.rating ? ` · ${h.rating}/5` : ''}` : esc(h.hood || '')}${pts ? ` · ~${kpts(pts)} pts` : ''}${over ? ` · <span class="src bad">+${gbp(h.cash - cap)}</span>` : ''}</div></div><div class="p">${gbp(h.cash)}<small>${live ? 'live' : 'typical'} / night</small></div></button>`; };
@@ -1889,6 +1995,7 @@ function legSheet() {
       <label class="field"><span>Arrives</span><div style="display:flex;gap:6px"><input class="inp" type="time" id="lgarr" value="${esc(l.arr || '')}"><select class="inp" id="lgday" style="width:74px">${[0, 1, 2].map((n) => `<option value="${n}" ${(l.arrDay || 0) === n ? 'selected' : ''}>${n ? '+' + n + 'd' : 'same'}</option>`).join('')}</select></div></label>
     </div>
     <div class="cta"><button class="pill go">Save</button></div></form>
+  ${l.mode === 'flight' && mcp ? `<div class="label"><span>Price alert</span></div>${watchBox('flight', t, l)}` : ''}
   ${mcp && d > 300 ? `<div class="label"><span>Live flights${date ? ' · ' + fmtD(date) : ''}</span><button class="pill sm" data-flights="${l.k}" ${V.busy['f' + l.k] ? 'disabled' : ''}>${lv ? 'Refresh' : 'Search SlickTrip'}</button></div>
     ${V.busy['f' + l.k] ? '<div class="busy">Searching fares…</div>' : ''}${V.err['f' + l.k] ? `<div class="err">${esc(V.err['f' + l.k])}</div>` : ''}
     ${lv ? `<div class="card"><div class="hgroup"><span>${lv.list.length} cheapest · ${CABINS[t.cabin]}</span>${lv.url ? `<a class="lnk" href="${esc(lv.url)}" target="_blank" rel="noopener">SlickTrip ↗</a>` : ''}</div>${lv.list.map((f, j) => `<button class="hrow" data-fl="${j}"><div style="min-width:0"><div class="n">${esc(f.airline)}</div><div class="m">${esc(f.stops)}${f.mins ? ' · ' + hm(f.mins) : ''}${f.best.map((b) => ` <span class="src live">${esc(b.replace(/_/g, ' '))}</span>`).join('')}</div><div class="m">${esc(f.times)}</div></div><div class="p">${gbp(f.price)}<small>total</small></div></button>`).join('') || '<div class="empty">No fares came back.</div>'}</div>` : ''}` : ''}
@@ -1933,6 +2040,8 @@ function tripsSheet() {
   <label class="field" style="margin-top:12px"><span>This trip's name</span><input class="inp" id="tname" value="${esc(t.name)}"></label>
   <div class="label"><span>All trips</span></div>
   <div class="card">${S.trips.map((x) => { const tt = totals(x); return `<button class="trow ${x.id === t.id ? 'on' : ''}" data-trip="${x.id}"><span><b>${esc(x.name)}</b><small>${x.stops.map((s) => esc(s.city)).join(' → ') || 'No stops yet'}${x.start ? ' · ' + fmtD(x.start) : ''}</small></span><span style="text-align:right"><b>${gbp(tt.cash)}</b><small>${tt.nights} nights${x.budget ? ' · ' + (tt.cash > x.budget ? 'over' : 'in') + ' budget' : ''}</small></span></button>`; }).join('')}</div>
+  ${mcp ? `<div class="label"><span>Price alerts</span></div><div class="card"><button class="trow" data-act="watches"><span><b>Your SlickTrip watches</b><small>Price moves and new lows on hotels and flights you watch</small></span><span>›</span></button></div>` : ''}
+  <div class="label"><span>Compare</span></div><div class="card"><button class="trow" data-act="variant"><span><b>Make a variant of this trip</b><small>Copy it, change things, then compare the two</small></span><span>›</span></button>${S.trips.length > 1 ? `<button class="trow" data-act="compare"><span><b>Compare two trips</b><small>Cost, time, points and stops side by side</small></span><span>›</span></button>` : ''}</div>
   <div class="label"><span>Calendar</span></div><div class="card"><button class="trow" data-act="cal"><span><b>Add to calendar</b><small>Flights, stays and day plans${webSync ? ', or a subscription that stays up to date' : ' as a calendar file'}</small></span><span>›</span></button></div>
   ${webSync ? `<div class="label"><span>Share</span></div><div class="card"><button class="trow" data-act="sharelink"><span><b>${t.share ? 'Shared · view-only link' : 'Share a view-only link'}</b><small>${t.share ? 'Anyone with the link sees this trip, updated as you edit' : 'For whoever you\'re travelling with — they can look, not change'}</small></span><span>›</span></button></div>` : ''}
   <div class="label"><span>Move trips between versions</span></div>
@@ -1940,6 +2049,36 @@ function tripsSheet() {
     <div class="cta" style="margin-top:0"><button class="pill" data-act="export">Copy all trips</button></div>
     <form id="importform" style="margin-top:12px;display:grid;gap:8px"><textarea class="inp" id="importq" rows="3" placeholder="Paste trips copied from the other version" style="font-size:13px;resize:vertical"></textarea><div><button class="pill go">Import</button></div></form></div>
   <div class="cta"><button class="pill" data-act="dup">Duplicate this trip</button>${S.trips.length > 1 ? (V.confirm === 'deltrip' ? `<button class="pill go" data-act="deltrip">Delete “${esc(t.name)}”</button><button class="pill" data-act="noconfirm">Cancel</button>` : `<button class="pill" data-act="askdeltrip">Delete this trip</button>`) : ''}</div>`;
+}
+function compareSheet() {
+  const A = S.trips.find((x) => x.id === V.cmp?.a) || T(), B = S.trips.find((x) => x.id === V.cmp?.b) || S.trips.find((x) => x !== A) || A;
+  const ta = totals(A), tb = totals(B);
+  const sel = (side, cur) => `<select class="inp sm" data-cmp="${side}" style="width:100%">${S.trips.map((x) => `<option value="${x.id}" ${x.id === cur.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`;
+  const ptsTxt = (tt) => Object.entries(tt.pts).map(([p, n]) => `${kpts(n)} ${p === 'avios' ? 'Avios' : PROGS[p]?.name.split(' ')[0] || p}`).join(', ') || '–';
+  const row = (label, va, vb, raw, better = 'low') => { let cls = ['', '']; if (raw && raw[0] !== raw[1]) { const aw = better === 'low' ? raw[0] < raw[1] : raw[0] > raw[1]; cls = aw ? ['win', ''] : ['', 'win']; } return `<tr><td>${label}</td><td class="${cls[0]}">${va}</td><td class="${cls[1]}">${vb}</td></tr>`; };
+  const diff = tb.cash - ta.cash;
+  const stays = (t) => t.stops.map((s) => `<div class="cstop"><b>${esc(s.city)}</b> · ${s.nights}n<br><small>${s.stay ? esc(s.stay.name) : 'No stay'}</small></div>`).join('');
+  return `${head()}<div class="stitle">Compare</div>
+  <div class="grid2" style="margin-top:12px">${sel('a', A)}${sel('b', B)}</div>
+  <div class="hero" style="margin-top:12px"><small>Difference</small><b>${diff === 0 ? 'Same price' : `${esc(diff > 0 ? A.name : B.name)} is ${gbp(Math.abs(diff))} cheaper`}</b><span>${gbp(Math.abs(diff) / Math.max(1, Math.max(A.trav, B.trav)))} per person · ${Math.abs(ta.days - tb.days) ? Math.abs(ta.days - tb.days) + ' day' + (Math.abs(ta.days - tb.days) === 1 ? '' : 's') + ' difference' : 'same length'}</span></div>
+  <div class="card" style="margin-top:12px"><table class="tbl cmp"><thead><tr><th></th><th>${esc(A.name)}</th><th>${esc(B.name)}</th></tr></thead><tbody>
+    ${row('Dates', `${fmtD(A.start)}<br>${fmtD(tripEnd(A))}`, `${fmtD(B.start)}<br>${fmtD(tripEnd(B))}`)}
+    ${row('Nights', ta.nights, tb.nights, [ta.nights, tb.nights], 'high')}
+    ${row('Stops', A.stops.length, B.stops.length, [A.stops.length, B.stops.length], 'high')}
+    ${row('In transit', hm(ta.travel), hm(tb.travel), [ta.travel, tb.travel])}
+    ${row('Travel', gbp(ta.legCash), gbp(tb.legCash), [ta.legCash, tb.legCash])}
+    ${row('Stays', gbp(ta.stayCash), gbp(tb.stayCash), [ta.stayCash, tb.stayCash])}
+    ${row('To do', gbp(ta.todoCash), gbp(tb.todoCash), [ta.todoCash, tb.todoCash])}
+    ${row('<b>Total</b>', `<b>${gbp(ta.cash)}</b>`, `<b>${gbp(tb.cash)}</b>`, [ta.cash, tb.cash])}
+    ${row('Per person', gbp(ta.cash / Math.max(1, A.trav)), gbp(tb.cash / Math.max(1, B.trav)), [ta.cash / A.trav, tb.cash / B.trav])}
+    ${row('Per night', gbp(ta.cash / Math.max(1, ta.nights)), gbp(tb.cash / Math.max(1, tb.nights)), [ta.cash / Math.max(1, ta.nights), tb.cash / Math.max(1, tb.nights)])}
+    ${row('Points used', ptsTxt(ta), ptsTxt(tb))}
+    ${row('Budget', A.budget ? (ta.cash > A.budget ? gbp(ta.cash - A.budget) + ' over' : gbp(A.budget - ta.cash) + ' left') : '–', B.budget ? (tb.cash > B.budget ? gbp(tb.cash - B.budget) + ' over' : gbp(B.budget - tb.cash) + ' left') : '–')}
+    ${row('Booked', gbp(ta.booked), gbp(tb.booked))}
+  </tbody></table></div>
+  <div class="label"><span>Stops and stays</span></div>
+  <div class="grid2"><div class="card pad">${stays(A) || '–'}</div><div class="card pad">${stays(B) || '–'}</div></div>
+  <div class="grid2" style="margin-top:12px"><button class="pill" data-act="usetrip" data-id="${A.id}">Open ${esc(A.name)}</button><button class="pill" data-act="usetrip" data-id="${B.id}">Open ${esc(B.name)}</button></div>`;
 }
 function calSheet() {
   const t = T(), url = calUrl(t);
@@ -2035,18 +2174,20 @@ document.addEventListener('click', (e) => {
   if (d.keep && S_) { const x = S_.todos.find((y) => y.id === d.keep); if (x) { x.keep = !x.keep; if (x.keep && S_.days) { const j = S_.days.reduce((bi, day, i, a) => day.length < a[bi].length ? i : bi, 0); S_.days[j].push(x.id); } save(); renderSheet(); } return; }
   if (d.filter) { V.filter = d.filter; return renderSheet(); }
   if (d.pay && S_?.stay) { S_.stay.pay = d.pay; save(); return renderSheet(); }
+  if (d.watch) { const tgt = +d.tgt || 0; if (d.watch === 'hotel' && S_) return watchItem('hotel', t, S_, tgt); const l = legsOf(t).find((x) => x.k === V.sheet?.id); if (l) return watchItem('flight', t, l, tgt); return; }
+  if (d.unwatch) { if (d.unwatch === 'hotel' && S_) return unwatchItem('hotel', t, S_); const l = legsOf(t).find((x) => x.k === V.sheet?.id); if (l) return unwatchItem('flight', t, l); return; }
   if (d.room && S_?.stay) {
     const key = d.room, st = S_.stay;
     if (key[0] === 'l') { const r = V.rooms[S_.id]?.rooms[+key.slice(1, key.indexOf(':'))]; if (r) setRoom(S_, { key, name: r.name, cash: r.cash, refundable: r.refundable, seller: r.seller }); }
     else { const [n, m] = ROOM_TIERS[+key.slice(1)]; setRoom(S_, { key, name: n, cash: Math.round(baseCash(st) * m / 5) * 5, est: true }); }
     renderSheet(); return toast('Room updated');
   }
-  if (d.hotel && S_) { const live = d.hotel[0] === 'l', j = +d.hotel.slice(1); const h = live ? V.live[S_.id]?.list[j] : S_.hotels[j]; if (h) { S_.stay = { name: h.name, hood: live ? S_.hood : h.hood, prog: h.prog, cash: h.cash, points: live ? 0 : h.points, stars: h.stars, rating: h.rating, url: h.url, pay: S_.stay?.pay === 'points' && PROGS[h.prog] ? 'points' : 'cash', src: live ? 'live' : (S_.src === 'claude' ? 'claude' : 'guide'), ...(live ? { sk: V.live[S_.id]?.key, hid: h.hid } : {}) }; if (!live && h.hood) S_.hood = h.hood; save(); renderSheet(); toast(`Staying at ${h.name}`); } return; }
+  if (d.hotel && S_) { const live = d.hotel[0] === 'l', j = +d.hotel.slice(1); const h = live ? V.live[S_.id]?.list[j] : S_.hotels[j]; if (h) { S_.stay = { name: h.name, hood: live ? S_.hood : h.hood, prog: h.prog, cash: h.cash, points: live ? 0 : h.points, stars: h.stars, rating: h.rating, url: h.url, pay: S_.stay?.pay === 'points' && PROGS[h.prog] ? 'points' : 'cash', src: live ? 'live' : (S_.src === 'claude' ? 'claude' : 'guide'), ...(live ? { sk: V.live[S_.id]?.key, hid: h.hid, su: V.live[S_.id]?.url } : {}) }; if (!live && h.hood) S_.hood = h.hood; save(); renderSheet(); toast(`Staying at ${h.name}`); } return; }
   if (d.live != null && S_) return liveHotels(S_.id, +d.live || 0);
   if (d.mode) { const l = legsOf(t).find((x) => x.k === V.sheet.id); t.legs[l.k] = { mode: d.mode, ...estLeg(l.a, l.b, d.mode, t), src: 'est', pay: 'cash' }; save(); return renderSheet(); }
   if (d.legpay || d.peak != null) { const l = legsOf(t).find((x) => x.k === V.sheet.id); const { a, b: bb, i, k, ...rest } = l; t.legs[l.k] = { ...rest, ...(d.legpay ? { pay: d.legpay } : { peak: d.peak === '1' }) }; save(); return renderSheet(); }
   if (d.flights) return liveFlights(d.flights);
-  if (d.fl != null) { const k = V.sheet.id, f = V.live[k]?.list[+d.fl]; if (f) { t.legs[k] = { mode: 'flight', time: f.mins || legsOf(t).find((x) => x.k === k)?.time || 0, price: f.price, note: `${f.airline.replace(/\s*[A-Z0-9]{2}\d{1,4}(\+[A-Z0-9]{2}\d{1,4})*$/, '')}${f.stops ? ', ' + f.stops.toLowerCase() : ''}`, src: 'live', pay: 'cash', ...flightTimes(f) }; save(); renderSheet(); toast('Flight added to the route'); } return; }
+  if (d.fl != null) { const k = V.sheet.id, f = V.live[k]?.list[+d.fl]; if (f) { t.legs[k] = { mode: 'flight', time: f.mins || legsOf(t).find((x) => x.k === k)?.time || 0, price: f.price, note: `${f.airline.replace(/\s*[A-Z0-9]{2}\d{1,4}(\+[A-Z0-9]{2}\d{1,4})*$/, '')}${f.stops ? ', ' + f.stops.toLowerCase() : ''}`, src: 'live', pay: 'cash', itin: f.id, ...flightTimes(f) }; save(); renderSheet(); toast('Flight added to the route'); } return; }
   if (d.idea != null) { const k = V.sheet.id, x = V.ideas[k]?.[+d.idea], l = legsOf(t).find((y) => y.k === k); if (x && l) { const at = l.b.ret ? t.stops.length : t.stops.findIndex((s) => s.id === l.b.id); closeSheet(); addCity({ name: x.city, country: x.country, lat: x.lat, lng: x.lng }, at < 0 ? t.stops.length : at); } return; }
   switch (d.act) {
     case 'close': return closeSheet();
@@ -2091,6 +2232,11 @@ document.addEventListener('click', (e) => {
     case 'preview': V.preview = t.start; V.tab = 'today'; renderMain(); return scrollTo(0, 0);
     case 'pvoff': V.preview = null; V.tab = inTrip(t) ? 'today' : 'plan'; return renderMain();
     case 'entry': V.busy.entry = true; renderMain(); checkEntry(t).then(() => { V.busy.entry = false; save(); renderMain(); }, (e) => { V.busy.entry = false; toast(claudeErr(e, 'Could not check entry rules')); renderMain(); }); return;
+    case 'watches': if (V.sheet?.k !== 'watches') { openSheet({ k: 'watches' }); } return loadWatches();
+    case 'compare': V.cmp = V.cmp || { a: t.id, b: S.trips.find((x) => x.id !== t.id)?.id || t.id }; return openSheet({ k: 'compare' });
+    case 'variant': { const c = JSON.parse(JSON.stringify(t)); c.id = uid(); c.name = t.name + ' (B)'; delete c.share; S.trips.unshift(c); V.cmp = { a: t.id, b: c.id }; S.cur = c.id; save(); M.sig = ''; renderMain(); toast('Variant made — change it, then compare'); return renderSheet(); }
+    case 'usetrip': S.cur = d.id; save(); M.sig = ''; closeSheet(); return;
+    case 'offline': return saveOffline(t);
     case 'roomrates': if (S_) liveRooms(S_); return;
     case 'fxopen': V.fxOpen = V.fxOpen === S_?.id ? null : S_?.id; return renderSheet();
     case 'fxclaude': V.busy.fx = true; renderSheet(); fxFromClaude(t).then(() => { V.busy.fx = false; renderSheet(); }, (e) => { V.busy.fx = false; toast(claudeErr(e, 'No rates came back')); renderSheet(); }); return;
@@ -2136,6 +2282,7 @@ document.addEventListener('change', (e) => {
   if (el.id === 'start') { t.start = el.value; save(); renderMain(); }
   if (el.id === 'photoin') addPhoto(el.files?.[0]);
   if (el.id === 'docin') addDoc(el.files?.[0]);
+  if (el.dataset.cmp) { V.cmp = { ...(V.cmp || {}), [el.dataset.cmp]: el.value }; renderSheet(); }
   if (el.dataset.person) renderMain();
   if (el.dataset.payer) { const [kind, key] = [el.dataset.payer.slice(0, el.dataset.payer.indexOf(':')), el.dataset.payer.slice(el.dataset.payer.indexOf(':') + 1)];
     if (kind === 'leg') { const l = legsOf(t).find((x) => x.k === key); if (l) { const { a, b: bb, i, k, ...rest } = l; t.legs[key] = { ...rest, paidBy: el.value }; } }

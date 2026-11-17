@@ -2,7 +2,7 @@
 
 Trip planner: route map, day plans, budgets, hotel loyalty and Avios, with Unsplash photos.
 
-- `public/` — the static app (index.html plus map tiles, city list and logos)
+- `public/` — the static app (index.html plus map tiles, city list and logos); `sw.js` makes it work offline
 - `netlify/functions/photos.mjs` — `/api/photos?q=` Unsplash search, CDN-cached for a week
 - `netlify/functions/photo-used.mjs` — tells Unsplash when a photo is chosen as a cover
 - `netlify/functions/ai.mjs` — `/api/ai`, Claude through Netlify AI Gateway (city research, travel planning, stopovers), streamed

@@ -181,6 +181,17 @@ select.inp { appearance: none; background: var(--card) url("data:image/svg+xml,%
 .src.live { background: var(--ok-soft); color: var(--ok); }
 .src.claude { background: var(--brand-soft); color: var(--brand); }
 .src.av { background: #E4EAF3; color: #1B365D; }
+/* View-only (shared link) */
+body.ro .grip, body.ro .addbox, body.ro .cta, body.ro form, body.ro .set, body.ro .step, body.ro .tog, body.ro select.mv, body.ro .ck, body.ro .tx,
+body.ro .hb.rw, body.ro .cover .cb, body.ro [data-act="askdel"], body.ro .seg, body.ro .daychips + .cmap ~ .cta, body.ro .split input, body.ro .label .pill, body.ro .todo .pill { display: none !important; }
+body.ro .todo { grid-template-columns: minmax(0, 1fr) auto; }
+body.ro .prow { grid-template-columns: 42px minmax(0, 1fr); padding-left: 12px; }
+.src.ok { background: var(--ok-soft); color: var(--ok); }
+.todo .tw { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.tthumb { flex: none; width: 54px; height: 54px; border-radius: 9px; overflow: hidden; }
+.tthumb img, .pthumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pthumb { flex: none; width: 38px; height: 38px; border-radius: 7px; }
+.pfix .pthumb { width: 30px; height: 30px; }
 .src.bad { background: var(--bad-soft); color: var(--bad); }
 .addbox { margin-top: 14px; position: relative; }
 .addrow { display: flex; gap: 8px; }
@@ -499,18 +510,32 @@ function toast(msg) { const t = document.createElement('div'); t.className = 'to
 
 
 /* ---------------- Unsplash photos (served by the web version's /api/photos; silently off elsewhere) ---------------- */
-const PH = { cache: {}, pending: {}, off: false, t: null };
+const PH = { cache: {}, pending: {}, fail: {}, off: false, t: null, q: [], live: 0 };
 try { PH.cache = JSON.parse(localStorage.getItem('journeys-planner-ph') || '{}') || {}; } catch {}
 const UTM = '?utm_source=journeys_planner&utm_medium=referral';
 function photosFor(q) {
   const k = keyOf(q); if (!k) return null;
   if (PH.cache[k]) return PH.cache[k];
-  if (PH.off || PH.pending[k]) return null;
-  PH.pending[k] = fetch('/api/photos?q=' + encodeURIComponent(q)).then((r) => { if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) throw new Error(); return r.json(); })
-    .then((j) => { PH.cache[k] = j.photos || []; try { localStorage.setItem('journeys-planner-ph', JSON.stringify(PH.cache)); } catch {} photoRefresh(); })
-    .catch(() => { PH.off = true; });
+  if (PH.off || PH.pending[k] || Date.now() - (PH.fail[k] || 0) < 600000) return null;
+  PH.pending[k] = true; PH.q.push([k, q]); pumpPhotos();
   return null;
 }
+// Two requests at a time, so a city full of activities doesn't burst through Unsplash's hourly limit.
+function pumpPhotos() {
+  while (PH.live < 2 && PH.q.length) {
+    const [k, q] = PH.q.shift(); PH.live++;
+    fetch('/api/photos?q=' + encodeURIComponent(q)).then((r) => {
+      const isJson = (r.headers.get('content-type') || '').includes('json');
+      if (!isJson) { PH.off = true; throw new Error('off'); } // no photo service here (e.g. inside Claude)
+      if (!r.ok) throw new Error('busy');
+      return r.json();
+    }).then((j) => { PH.cache[k] = j.photos || []; try { localStorage.setItem('journeys-planner-ph', JSON.stringify(PH.cache)); } catch {} photoRefresh(); })
+      .catch(() => { PH.fail[k] = Date.now(); })
+      .finally(() => { PH.pending[k] = false; PH.live--; pumpPhotos(); });
+  }
+}
+const todoQ = (s, x) => `${x.name} ${s.city}`;
+function todoPhoto(s, x, fetchIt = true) { const k = keyOf(todoQ(s, x)); return (PH.cache[k] || (fetchIt ? photosFor(todoQ(s, x)) : null) || [])[0] || null; }
 function photoRefresh() { clearTimeout(PH.t); PH.t = setTimeout(() => { if (DR || V.play || document.activeElement?.matches('input,select,textarea')) return photoRefresh(); refresh(); }, 250); }
 const cityQ = (s) => `${s.city} ${s.country || ''}`.trim();
 function coverPhoto(s) { if (s.photos?.[0]) return { url: s.photos[0].url, own: true }; if (s.cover) return s.cover; const l = photosFor(cityQ(s)); return l?.[0] || null; }
@@ -621,9 +646,11 @@ function stayCost(t, s) {
 }
 function totals(t) {
   const legs = legsOf(t); let travel = 0, legCash = 0, stayCash = 0, todoCash = 0, avios = 0; const pts = {}, earn = {}, per = {};
-  legs.forEach((l) => { travel += l.time; const c = legCost(t, l); legCash += c.cash; avios += c.avios; if (!l.b.ret) per[l.b.id] = { travel: c.cash }; });
+  let booked = 0; const todo = [];
+  legs.forEach((l) => { travel += l.time; const c = legCost(t, l); legCash += c.cash; avios += c.avios; if (!l.b.ret) per[l.b.id] = { travel: c.cash }; if (l.booked) booked += c.cash; else todo.push({ kind: 'leg', k: l.k, name: `${MODE_NAME[l.mode]} ${l.a.city} → ${l.b.city}`, cash: c.cash }); });
   t.stops.forEach((s) => {
     const c = stayCost(t, s); stayCash += c.cash;
+    if (s.stay) { if (s.stay.booked) booked += c.cash; else todo.push({ kind: 'stay', id: s.id, name: `${s.stay.name}, ${s.city}`, cash: c.cash }); }
     if (c.pts) pts[s.stay.prog] = (pts[s.stay.prog] || 0) + c.pts;
     if (c.earn) earn[s.stay.prog] = (earn[s.stay.prog] || 0) + c.earn;
     const td = s.todos.reduce((a, x) => a + (x.keep ? (x.cost || 0) * t.trav : 0), 0); todoCash += td;
@@ -631,7 +658,7 @@ function totals(t) {
   });
   if (avios) pts.avios = avios;
   const nights = t.stops.reduce((a, s) => a + s.nights, 0);
-  return { travel, legCash, stayCash, todoCash, cash: legCash + stayCash + todoCash, pts, earn, nights, days: nights + 1, per };
+  return { travel, legCash, stayCash, todoCash, cash: legCash + stayCash + todoCash, pts, earn, nights, days: nights + 1, per, booked, toBook: todo };
 }
 function suggestCap(t) {
   if (!t.budget) return 0; const tot = totals(t);
@@ -641,7 +668,17 @@ function suggestCap(t) {
 
 /* ---------------- Day plans ---------------- */
 const hrsOf = (x) => x.hours || 1.5;
-function dayCap(t, s, d) { if (d > 0) return 9; const l = legsOf(t).find((x) => x.b.id === s.id); return l && l.time > 240 ? 4 : 6.5; }
+const toMin = (hhmm) => { const [h, m] = String(hhmm || '').split(':'); return h === '' || h == null ? null : (+h || 0) * 60 + (+m || 0); };
+function inLegOf(t, s) { return legsOf(t).find((x) => x.b.id === s.id); }
+// Day index (within the stop) you actually arrive on, and the time you're free from (arrival + 90 min).
+function arrival(t, s) { const l = inLegOf(t, s); if (!l) return { day: 0, min: null, l }; const a = toMin(l.arr); return { day: a == null ? 0 : Math.min(l.arrDay || 0, Math.max(0, s.nights - 1)), min: a == null ? null : a + 90, l }; }
+function dayCap(t, s, d) {
+  const ar = arrival(t, s);
+  if (d < ar.day) return 0;
+  if (d > ar.day) return 9;
+  if (ar.min != null) return Math.max(0, Math.round((21 * 60 - ar.min) / 30) / 2);
+  return ar.l && ar.l.time > 240 ? 4 : 6.5;
+}
 function autoPlan(t, s) {
   const n = Math.max(1, s.nights), kept = s.todos.filter((x) => x.keep);
   const days = Array.from({ length: n }, (_, i) => ({ ids: [], left: dayCap(t, s, i), hoods: new Set() }));
@@ -674,7 +711,12 @@ function syncDays(t, s) {
   if (s.days.length > n) { const extra = s.days.splice(n).flat(); s.days[n - 1].push(...extra); }
 }
 const unplanned = (s) => { const inDay = new Set((s.days || []).flat()); return s.todos.filter((x) => x.keep && !inDay.has(x.id)); };
-function dayStart(t, s, d) { if (d > 0) return 9 * 60 + 30; const l = legsOf(t).find((x) => x.b.id === s.id); return l ? Math.min(17 * 60, Math.max(11 * 60, 9 * 60 + (l.time || 0) + 90)) : 11 * 60; }
+function dayStart(t, s, d) {
+  const ar = arrival(t, s);
+  if (d !== ar.day) return 9 * 60 + 30;
+  if (ar.min != null) return ar.min;
+  const l = ar.l; return l ? Math.min(17 * 60, Math.max(11 * 60, 9 * 60 + (l.time || 0) + 90)) : 11 * 60;
+}
 function timesFor(t, s, d) { let m = dayStart(t, s, d); const by = new Map(s.todos.map((x) => [x.id, x])); return (s.days[d] || []).map((id) => { const x = by.get(id); const st = m; m += hrsOf(x) * 60 + 30; return { x, st }; }).filter((r) => r.x); }
 
 /* ---------------- Persistence ----------------
@@ -690,6 +732,8 @@ const setLocalAt = (n) => { try { localStorage.setItem(LS + '-at', String(n)); }
 function newCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(20)); return [...r].map((b, i) => A[b % A.length] + (i % 5 === 4 && i < 19 ? '-' : '')).join(''); }
 function serial() { return JSON.stringify({ trips: S.trips, cur: S.cur, wallet: S.wallet }); }
 function save() {
+  if (V.ro) return;
+  updateShareSoon(T());
   clearTimeout(saveT);
   setLocalAt(Date.now());
   saveT = setTimeout(async () => {
@@ -754,7 +798,57 @@ async function uploadBlob(blob) {
   const r = await fetch('/api/upload', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-sync-code': syncCode() }, body: blob });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Upload failed'); return { id: 'w:' + j.id, url: j.url };
 }
+/* ---------------- Share links (website only) ---------------- */
+let shareT = null;
+function shareDoc(t) {
+  const c = JSON.parse(JSON.stringify(t)); delete c.share;
+  const packs = {}; [t.home, ...t.stops].forEach((s) => { const k = keyOf(s.city); if (S.packs[k]) packs[k] = S.packs[k]; });
+  return JSON.stringify({ trip: c, packs, sharedBy: 'Journeys Planner' });
+}
+const shareUrl = (t) => t.share ? `${location.origin}/?trip=${t.share.id}` : '';
+async function createShare(t) {
+  const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: shareDoc(t) }) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Could not create the link');
+  t.share = { id: j.id, token: j.token }; save();
+}
+function updateShareSoon(t) {
+  if (!t?.share || !webSync) return; clearTimeout(shareT);
+  shareT = setTimeout(() => fetch('/api/share?id=' + t.share.id, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-share-token': t.share.token }, body: JSON.stringify({ doc: shareDoc(t) }) }).catch(() => {}), 1500);
+}
+async function stopShare(t) {
+  if (!t.share) return;
+  await fetch('/api/share?id=' + t.share.id, { method: 'DELETE', headers: { 'x-share-token': t.share.token } }).catch(() => {});
+  delete t.share; save();
+}
+async function bootShared(id) {
+  V.ro = true; document.body.classList.add('ro');
+  $('#main').innerHTML = '<div class="busy" style="margin-top:40px">Loading shared trip…</div>';
+  try {
+    const r = await fetch('/api/share?id=' + encodeURIComponent(id), { cache: 'no-store' });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'This link does not work');
+    const doc = JSON.parse(j.doc);
+    S = { trips: [doc.trip], cur: doc.trip.id, wallet: blankWallet(), packs: doc.packs || {} };
+    V.sharedAt = j.at; migrate(); render();
+  } catch (e) {
+    $('#main').innerHTML = `<div class="card pad" style="margin-top:40px"><b>${esc(e.message)}</b><p class="note">Ask whoever sent it for a new link.</p><a class="pill go" href="/">Open my planner</a></div>`;
+  }
+}
+function saveSharedCopy() {
+  const shared = T(); let local = {};
+  try { local = JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch {}
+  const c = JSON.parse(JSON.stringify(shared)); c.id = uid(); delete c.share;
+  local.trips = [c, ...(local.trips || [])]; local.cur = c.id;
+  try {
+    localStorage.setItem(LS, JSON.stringify(local));
+    const packs = JSON.parse(localStorage.getItem(LS + '-packs') || '{}') || {};
+    localStorage.setItem(LS + '-packs', JSON.stringify({ ...S.packs, ...packs })); setLocalAt(Date.now());
+  } catch {}
+  location.href = location.origin + location.pathname;
+}
+
 async function boot() {
+  const sid = new URLSearchParams(location.search).get('trip');
+  if (sid) return bootShared(sid);
   loadLocal();
   if (!S.trips.length) demoTrip();
   migrate(); render();
@@ -785,8 +879,8 @@ function renderMain() {
   const t = T(); if (!t) return;
   const tab = V.tab;
   let html = `<header class="top">
-    <div style="min-width:0"><div class="eyebrow">Journeys planner</div><h1><button data-act="trips">${esc(t.name)}</button></h1><div class="save" id="savest">${saveLabel()}</div></div>
-    <div class="hb"><button class="pill" data-act="trips">Trips</button><button class="pill" data-act="wallet">Wallet</button>${webSync ? `<button class="pill ${syncCode() ? '' : 'go'}" data-act="sync" aria-label="Sync">${syncCode() ? '⟳' : 'Sync'}</button>` : ''}</div>
+    <div style="min-width:0"><div class="eyebrow">${V.ro ? 'Shared trip · view only' : 'Journeys planner'}</div><h1><button data-act="trips">${esc(t.name)}</button></h1><div class="save" id="savest">${V.ro ? (V.sharedAt ? 'Updated ' + new Date(V.sharedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') : saveLabel()}</div></div>
+    ${V.ro ? '<div class="hb"><button class="pill go" data-act="savecopy">Save a copy</button></div>' : ''}<div class="hb ${V.ro ? 'rw' : ''}"><button class="pill" data-act="trips">Trips</button><button class="pill" data-act="wallet">Wallet</button>${webSync ? `<button class="pill ${syncCode() ? '' : 'go'}" data-act="sync" aria-label="Sync">${syncCode() ? '⟳' : 'Sync'}</button>` : ''}</div>
   </header>
   <nav class="tabs" role="tablist">${[['route', 'Route'], ['plan', 'Plan'], ['budget', 'Budget']].map(([k, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</nav>`;
   if (tab !== 'budget') html += `<div class="mapbox" id="mapbox"><svg id="map"></svg>
@@ -853,16 +947,18 @@ function stopCard(t, s, i, d) {
     ${thumb(s, i + 1)}
     <div class="sbody" data-open="${s.id}"><div class="sname">${esc(s.city)}<small>${esc(s.country)}</small></div>
       <div class="smeta">${d?.in ? `${fmtD(d.in)} → ${fmtD(d.out)} · ` : ''}<b>${s.nights}</b> night${s.nights === 1 ? '' : 's'}${s.hood ? ' · ' + esc(s.hood) : ''}</div>
-      <div class="smeta">${st ? `${logo(st.prog)} ${esc(st.name)} · ${st.pay === 'points' && PROGS[st.prog] ? kpts(c.pts) + ' pts' : gbp(c.cash)}${over ? ' <span class="src bad">over cap</span>' : ''}` : 'No stay chosen'}${kept ? ` · ${kept} to do` : ''}</div></div>
+      <div class="smeta">${st ? `${logo(st.prog)} ${esc(st.name)} · ${st.pay === 'points' && PROGS[st.prog] ? kpts(c.pts) + ' pts' : gbp(c.cash)}${over ? ' <span class="src bad">over cap</span>' : ''}${st.booked ? ' <span class="src ok">✓</span>' : ''}` : 'No stay chosen'}${kept ? ` · ${kept} to do` : ''}</div></div>
     <button class="grip" data-grip aria-label="Drag to reorder">${GRIP}</button>
   </div>`;
 }
 function legRow(t, l) {
   const d = km(l.a, l.b), c = legCost(t, l);
   const tag = l.pay === 'avios' ? '<span class="src av">Avios</span>' : `<span class="src ${l.src === 'live' ? 'live' : l.src === 'claude' ? 'claude' : ''}">${l.src === 'live' ? 'live' : l.src === 'claude' ? 'Claude' : l.src === 'custom' ? 'yours' : 'est'}</span>`;
+  const bk = l.booked ? '<span class="src ok">✓ Booked</span>' : '';
+  const sched = l.dep || l.arr || l.num ? `${esc(l.num || '')}${l.num && (l.dep || l.arr) ? ' · ' : ''}${l.dep ? esc(l.dep) : ''}${l.dep && l.arr ? ' → ' : ''}${l.arr ? esc(l.arr) + (l.arrDay ? ' +' + l.arrDay : '') : ''}${l.ref ? ' · ref ' + esc(l.ref) : ''}` : '';
   return `<button class="leg" data-leg="${l.k}">
     <div class="rail"><span class="ic ${l.mode}">${ICON[l.mode]}</span></div>
-    <div class="lt">${MODE_NAME[l.mode]} · ${hm(l.time)} ${tag}<small>${esc(l.note || `${Math.round(d).toLocaleString('en-GB')} km`)}</small></div>
+    <div class="lt">${MODE_NAME[l.mode]} · ${hm(l.time)} ${bk || tag}<small>${sched || esc(l.note || `${Math.round(d).toLocaleString('en-GB')} km`)}</small></div>
     <div class="lp">${l.pay === 'avios' ? kpts(c.avios) + '<small>+ ' + gbp(c.cash) + '</small>' : gbp(c.cash) + `<small>${t.trav > 1 ? 'all travellers' : ''}</small>`}</div>
   </button>`;
 }
@@ -876,13 +972,13 @@ function planView(t) {
     s.days.forEach((ids, d) => {
       dn++; const date = dayAdd(dates[i].in, d), rows = timesFor(t, s, d), hrs = rows.reduce((a, r) => a + hrsOf(r.x), 0);
       html += `<div class="day"><button class="dh" data-openday="${s.id}" data-d="${d}"><span><b>Day ${dn} · ${esc(s.city)}</b><small>${fmtD(date)}${s.hood ? ' · based in ' + esc(s.hood) : ''}</small></span><span class="hrs">${rows.length ? hm(hrs * 60) : 'Free day'} ›</span></button>
-        ${d === 0 && inLeg ? `<div class="pfix"><span class="ic ${inLeg.mode}">${ICON[inLeg.mode]}</span><span><b>${MODE_NAME[inLeg.mode]} from ${esc(inLeg.a.city)}</b> · ${hm(inLeg.time)}${inLeg.note ? ' · ' + esc(inLeg.note) : ''}</span></div>` : ''}
-        ${rows.map((r, j) => `<div class="pfix" style="cursor:pointer" data-openday="${s.id}" data-d="${d}"><span class="tm" style="font:600 12px var(--f);width:38px">${clock(r.st)}</span><span><span class="no2" style="background:${TYPE_COL[r.x.type] || 'var(--ink)'}">${j + 1}</span><b>${esc(r.x.name)}</b> · ${hm(hrsOf(r.x) * 60)}${r.x.cost ? ' · ' + gbp(r.x.cost) + 'pp' : ''}</span></div>`).join('')}
-        ${s.stay ? `<div class="pfix"><span class="ic">${ICON.bed}</span><span>Night at <b>${esc(s.stay.name)}</b></span></div>` : ''}</div>`;
+        ${d === 0 && inLeg ? `<div class="pfix"><span class="ic ${inLeg.mode}">${ICON[inLeg.mode]}</span><span><b>${MODE_NAME[inLeg.mode]} from ${esc(inLeg.a.city)}</b>${inLeg.num ? ' ' + esc(inLeg.num) : ''} · ${inLeg.dep && inLeg.arr ? esc(inLeg.dep) + ' → ' + esc(inLeg.arr) + (inLeg.arrDay ? ' +' + inLeg.arrDay : '') : hm(inLeg.time)}${inLeg.ref ? ' · ref ' + esc(inLeg.ref) : ''}${inLeg.booked ? ' <span class="src ok">✓ Booked</span>' : ''}</span></div>` : ''}
+        ${rows.map((r, j) => `<div class="pfix" style="cursor:pointer" data-openday="${s.id}" data-d="${d}"><span class="tm" style="font:600 12px var(--f);width:38px">${clock(r.st)}</span>${(() => { const tp = r.x.custom ? null : todoPhoto(s, r.x, false); return tp ? `<img class="pthumb" src="${esc(tp.thumb)}" alt="" style="background:${esc(tp.color || '#ddd')}" loading="lazy">` : ''; })()}<span><span class="no2" style="background:${TYPE_COL[r.x.type] || 'var(--ink)'}">${j + 1}</span><b>${esc(r.x.name)}</b> · ${hm(hrsOf(r.x) * 60)}${r.x.cost ? ' · ' + gbp(r.x.cost) + 'pp' : ''}</span></div>`).join('')}
+        ${s.stay ? `<div class="pfix"><span class="ic">${ICON.bed}</span><span>Night at <b>${esc(s.stay.name)}</b>${s.stay.ref ? ' · ref ' + esc(s.stay.ref) : ''}${s.stay.booked ? ' <span class="src ok">✓ Booked</span>' : ''}</span></div>` : ''}</div>`;
     });
   });
   const back = legs.find((l) => l.b.ret);
-  if (back) html += `<div class="day"><div class="dh"><span><b>Day ${dn + 1} · Home</b><small>${fmtD(dayAdd(t.start, totals(t).nights))}</small></span></div><div class="pfix"><span class="ic ${back.mode}">${ICON[back.mode]}</span><span><b>${MODE_NAME[back.mode]} ${esc(back.a.city)} → ${esc(back.b.city)}</b> · ${hm(back.time)}</span></div></div>`;
+  if (back) html += `<div class="day"><div class="dh"><span><b>Day ${dn + 1} · Home</b><small>${fmtD(dayAdd(t.start, totals(t).nights))}</small></span></div><div class="pfix"><span class="ic ${back.mode}">${ICON[back.mode]}</span><span><b>${MODE_NAME[back.mode]} ${esc(back.a.city)} → ${esc(back.b.city)}</b>${back.num ? ' ' + esc(back.num) : ''} · ${back.dep && back.arr ? esc(back.dep) + ' → ' + esc(back.arr) + (back.arrDay ? ' +' + back.arrDay : '') : hm(back.time)}${back.ref ? ' · ref ' + esc(back.ref) : ''}${back.booked ? ' <span class="src ok">✓ Booked</span>' : ''}</span></div></div>`;
   if (!t.stops.length) html += `<div class="card empty">Add a destination on the Route tab to start planning days.</div>`;
   return html;
 }
@@ -902,6 +998,8 @@ function budgetView(t) {
   <div class="set"><span class="step"><button data-act="rooms" data-d="-1" aria-label="Fewer rooms">−</button><b>${t.rooms}</b><button data-act="rooms" data-d="1" aria-label="More rooms">+</button></span><span class="lbl">room${t.rooms === 1 ? '' : 's'} for ${t.trav} traveller${t.trav === 1 ? '' : 's'}</span></div>
   <div class="cta"><button class="pill" data-act="repick" ${t.hotelCap ? '' : 'disabled'}>Re-pick hotels under ${t.hotelCap ? gbp(t.hotelCap) : 'cap'}</button></div></div>
   ${budgetBar(t, tot, false)}${ptsChips(t, tot)}
+  <div class="label"><span>Bookings</span><span class="r">${gbp(tot.booked)} booked · ${gbp(tot.legCash + tot.stayCash - tot.booked)} to go</span></div>
+  <div class="card">${tot.toBook.length ? tot.toBook.map((x) => `<button class="trow" ${x.kind === 'leg' ? `data-leg="${esc(x.k)}"` : `data-open="${x.id}" data-st="stay"`}><span><b>${esc(x.name)}</b><small>Not booked yet</small></span><span style="font-weight:650">${gbp(x.cash)}</span></button>`).join('') : '<div class="empty">Everything is booked. 🎉</div>'}</div>
   <div class="label"><span>By stop</span><span class="r">${gbp(tot.cash / Math.max(1, t.trav))} per person</span></div>
   <div class="card"><table class="tbl"><thead><tr><th>Stop</th><th>Travel in</th><th>Stay</th><th>To do</th><th>Total</th></tr></thead><tbody>${rows}${back ? `<tr><td>Home</td><td>${gbp(bc)}</td><td>–</td><td>–</td><td><b>${gbp(bc)}</b></td></tr>` : ''}</tbody>
   <tfoot><tr><td>Trip</td><td>${gbp(tot.legCash)}</td><td>${gbp(tot.stayCash)}</td><td>${gbp(tot.todoCash)}</td><td>${gbp(tot.cash)}</td></tr></tfoot></table></div>
@@ -926,7 +1024,7 @@ async function drawMap() {
   g.selectAll('path.lghit').data(legs).join('path').attr('class', 'lghit').attr('d', lp).on('click', (e, l) => { e.stopPropagation(); if (!V.play) openLeg(l.k); });
   const hd = []; t.stops.forEach((s) => s.hoods.forEach((x) => { if (x.lat != null) { const [px, py] = proj([x.lng, x.lat]); hd.push({ s, x, px, py }); } }));
   const hg = g.append('g');
-  const hs = hg.selectAll('g.hd').data(hd).join('g').attr('class', (d) => 'hd' + (d.s.hood === d.x.name ? ' on' : '')).on('click', (e, d) => { e.stopPropagation(); d.s.hood = d.x.name; save(); renderMain(); toast(`Base in ${d.x.name}`); });
+  const hs = hg.selectAll('g.hd').data(hd).join('g').attr('class', (d) => 'hd' + (d.s.hood === d.x.name ? ' on' : '')).on('click', (e, d) => { e.stopPropagation(); if (V.ro) return; d.s.hood = d.x.name; save(); renderMain(); toast(`Base in ${d.x.name}`); });
   hs.append('circle').attr('r', 5); hs.append('text').attr('x', 8).attr('y', 4).text((d) => d.x.name);
   const pts = [{ s: t.home, n: '⌂', home: true }, ...t.stops.map((s, i) => ({ s, n: i + 1 }))].filter((d) => d.s.lat != null).map((d) => { const [px, py] = proj([d.s.lng, d.s.lat]); return { ...d, px, py }; });
   const pg = g.selectAll('g.pin').data(pts).join('g').attr('class', (d) => 'pin' + (d.home ? ' home' : '')).attr('data-id', (d) => d.s.id).on('click', (e, d) => { e.stopPropagation(); if (V.play) return; if (d.home) openSheet({ k: 'home' }); else openStop(d.s.id); });
@@ -1014,7 +1112,7 @@ async function drawCityMap() {
   // detail layers arrive async; draw markers first
   const P = (p) => proj([p.lng, p.lat]);
   if (dayIds && shown.length > 1) over.append('path').attr('class', 'droute').attr('d', d3.line()(shown.map(P)));
-  const hg = over.selectAll('g.hd').data(hoods).join('g').attr('class', (d) => 'hd' + (d.name === s.hood ? ' on' : '')).style('cursor', 'pointer').on('click', (e, d) => { s.hood = d.name; save(); renderSheet(); });
+  const hg = over.selectAll('g.hd').data(hoods).join('g').attr('class', (d) => 'hd' + (d.name === s.hood ? ' on' : '')).style('cursor', 'pointer').on('click', (e, d) => { if (V.ro) return; s.hood = d.name; save(); renderSheet(); });
   hg.append('circle').attr('r', (d) => d.name === s.hood ? 7 : 5); hg.append('text').attr('x', 10).attr('y', 4).text((d) => d.name);
   if (s.stay) { const hp = s.hoods.find((x) => x.name === (s.stay.hood || s.hood)); if (hp) { const st = over.append('g').attr('class', 'hstar').datum(hp); st.append('path').attr('d', d3.symbol(d3.symbolStar, 150)()); st.append('title').text(s.stay.name); } }
   const order = new Map(); (s.days || []).forEach((d, di) => d.forEach((id, j) => order.set(id, { di, j })));
@@ -1196,6 +1294,15 @@ async function liveFlights(k) {
   V.busy['f' + k] = false; renderSheet();
 }
 
+/* Pull flight numbers and times out of a SlickTrip line like "BA BA7 | LHR 2027-03-08 11:35 -> HND 2027-03-09 07:20 (next day)". */
+function flightTimes(f) {
+  const num = (f.airline.match(/[A-Z0-9]{2}\d{1,4}(\+[A-Z0-9]{2}\d{1,4})*/) || [''])[0];
+  const m = [...(f.times || '').matchAll(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/g)];
+  if (m.length < 2) return { num };
+  const days = Math.round((new Date(m[1][1]) - new Date(m[0][1])) / 864e5);
+  return { num, dep: m[0][2], arr: m[1][2], arrDay: Math.max(0, Math.min(2, days)) };
+}
+
 /* ---------------- Photos ---------------- */
 async function addPhoto(file) {
   const t = T(), s = t.stops.find((x) => x.id === V.sheet?.id); if (!s || !file) return;
@@ -1238,7 +1345,7 @@ function closeSheet() { V.sheet = null; V.day = null; renderSheet(); renderMain(
 function renderSheet() {
   const el = $('#sheet'), old = $('.sheet', el), y = old ? old.scrollTop : 0, key = V.sheet ? V.sheet.k + ':' + (V.sheet.id || '') : '';
   const k = V.sheet?.k;
-  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : '';
+  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : k === 'share' ? shareSheet() : '';
   el.innerHTML = html ? `<div class="sheet"><div class="wrap">${html}</div></div>` : '';
   if (html && el.dataset.key === key) $('.sheet', el).scrollTop = y;
   el.dataset.key = key; document.body.style.overflow = html ? 'hidden' : '';
@@ -1247,6 +1354,7 @@ function renderSheet() {
 }
 function renderLight() {
   const el = $('#light'), L = V.light; if (!L) { el.innerHTML = ''; return; }
+  if (L.photo) { const p = L.photo; el.innerHTML = `<div class="light"><img src="${esc(p.url)}" alt="${esc(p.alt || '')}"><div class="lb" style="align-items:center"><span style="color:#fff;font-size:12.5px;flex:1">${esc(L.title || '')}<br><a href="${esc(p.link + UTM)}" target="_blank" rel="noopener" style="color:rgba(255,255,255,.75)">Photo: ${esc(p.name)} / Unsplash</a></span><button class="pill on" data-act="lclose">Done</button></div></div>`; return; }
   const s = T().stops.find((x) => x.id === L.sid), ph = s?.photos[L.i]; if (!ph) { V.light = null; el.innerHTML = ''; return; }
   el.innerHTML = `<div class="light"><img src="${esc(ph.url)}" alt=""><div class="lb"><button class="pill" data-act="lprev" ${L.i === 0 ? 'disabled' : ''}>←</button><button class="pill" data-act="lcover" ${L.i === 0 ? 'disabled' : ''}>Make cover</button><button class="pill" data-act="ldel" style="color:var(--bad)">Remove</button><button class="pill" data-act="lnext" ${L.i >= s.photos.length - 1 ? 'disabled' : ''}>→</button><button class="pill on" data-act="lclose">Done</button></div></div>`;
 }
@@ -1279,7 +1387,7 @@ function planPane(t, s, d) {
   const days = s.days.map((ids, j) => {
     if (V.day != null && V.day !== j) return '';
     const rows = timesFor(t, s, j), hrs = rows.reduce((a, r) => a + hrsOf(r.x), 0), cap = dayCap(t, s, j);
-    return `<div class="day"><div class="dh ${V.day === j ? 'on' : ''}"><span><b>Day ${j + 1} · ${fmtD(dayAdd(d.in, j))}</b><small>${j === 0 ? 'Arrival day' : rows.length ? [...new Set(rows.map((r) => r.x.hood).filter(Boolean))].join(' · ') : 'Nothing planned yet'}</small></span><span class="hrs ${hrs > cap ? 'over' : ''}">${hm(hrs * 60)} / ${hm(cap * 60)}</span></div>
+    return `<div class="day"><div class="dh ${V.day === j ? 'on' : ''}"><span><b>Day ${j + 1} · ${fmtD(dayAdd(d.in, j))}</b><small>${j < arrival(t, s).day ? 'In transit' : j === arrival(t, s).day ? 'Arrival day' + (arrival(t, s).min != null ? ' · free from ' + clock(arrival(t, s).min) : '') : rows.length ? [...new Set(rows.map((r) => r.x.hood).filter(Boolean))].join(' · ') : 'Nothing planned yet'}</small></span><span class="hrs ${hrs > cap ? 'over' : ''}">${hm(hrs * 60)} / ${hm(cap * 60)}</span></div>
       <div class="pday" data-sgroup="act" data-day="${j}">${rows.map((r, n) => actRow(s, r.x, clock(r.st), n + 1, j)).join('')}</div></div>`;
   }).join('');
   return `<div class="cta"><button class="pill" data-act="autoplan">Auto-plan by neighbourhood</button><button class="pill ghost" data-stab="explore">＋ Add things to do</button></div>
@@ -1289,10 +1397,11 @@ function planPane(t, s, d) {
   <p class="note">Times assume a 9:30 start, 30 minutes between stops, and your arrival time on day 1. Drag ⠿ to reorder within a day or move between days.</p>`;
 }
 function actRow(s, x, time, n, day) {
+  const tp = x.custom ? null : todoPhoto(s, x);
   const opts = s.days.map((_, j) => `<option value="${j}" ${day === j ? 'selected' : ''}>Day ${j + 1}</option>`).join('');
   return `<div class="prow" data-sort="act" data-id="${x.id}"><button class="grip" data-grip aria-label="Drag to move">${GRIP}</button>
     <span class="tm">${time || '—'}</span>
-    <div style="min-width:0"><div class="pn">${n ? `<span class="no2" style="background:${TYPE_COL[x.type] || 'var(--ink)'}">${n}</span>` : ''}${esc(x.name)}</div><div class="pm">${esc(x.hood || '')}${x.hours ? ' · ' + hm(x.hours * 60) : ''}${x.cost ? ' · ' + gbp(x.cost) + 'pp' : ' · free'}</div></div>
+    <div style="min-width:0;display:flex;gap:9px;align-items:center">${tp ? `<img class="pthumb" src="${esc(tp.thumb)}" alt="" style="background:${esc(tp.color || '#ddd')}" loading="lazy">` : ''}<div style="min-width:0"><div class="pn">${n ? `<span class="no2" style="background:${TYPE_COL[x.type] || 'var(--ink)'}">${n}</span>` : ''}${esc(x.name)}</div><div class="pm">${esc(x.hood || '')}${x.hours ? ' · ' + hm(x.hours * 60) : ''}${x.cost ? ' · ' + gbp(x.cost) + 'pp' : ' · free'}</div></div></div>
     <select class="mv" data-moveday="${x.id}" aria-label="Move to day"><option value="u" ${day === 'u' ? 'selected' : ''}>Later</option>${opts}<option value="x">Remove</option></select></div>`;
 }
 function stayPane(t, s, d) {
@@ -1311,7 +1420,8 @@ function stayPane(t, s, d) {
       <div class="money">
         ${st.pay === 'points' && isP ? `<div><b>${kpts(pts)}</b><span>pts / room / night</span></div><div><b>${kpts(c.pts)}</b><span>total points</span></div><div><b>${gbp(st.cash * s.nights * c.rooms)}</b><span>cash saved</span></div>`
         : `<div><b>${gbp(st.cash)}</b><span>per room / night</span></div><div><b>${gbp(c.full)}</b><span>${s.nights}n × ${c.rooms} room${c.rooms === 1 ? '' : 's'}</span></div><div><b>${gbp(c.pp)}</b><span>each${c.share > t.trav ? ` · you pay ${gbp(c.cash)}` : ''}</span></div>`}
-      </div>${isP && st.pay !== 'points' && c.earn ? `<div class="hm" style="margin-top:2px">Earns about <b>${kpts(c.earn)}</b> ${esc(PROGS[st.prog].name)} points</div>` : ''}</div>`;
+      </div>
+      <div class="split" style="border-top:1px dashed var(--line2)"><button class="tog ${st.booked ? 'on' : ''}" data-act="staybooked"><i></i>Booked</button><input class="inp sm" id="stayref" value="${esc(st.ref || '')}" placeholder="Confirmation number" autocapitalize="characters" style="flex:1;min-width:140px"></div>${isP && st.pay !== 'points' && c.earn ? `<div class="hm" style="margin-top:2px">Earns about <b>${kpts(c.earn)}</b> ${esc(PROGS[st.prog].name)} points</div>` : ''}</div>`;
   }
   const lv = V.live[s.id];
   const row = (h, key, live) => { const on = st && st.name === h.name, over = cap && h.cash > cap, pts = PROGS[h.prog] ? ptsFor(h) : 0;
@@ -1337,7 +1447,7 @@ function explorePane(t, s) {
   const kept = show.filter((x) => x.keep), gone = show.filter((x) => !x.keep);
   const byHood = {}; kept.forEach((x) => { const h = x.hood || 'Anywhere'; (byHood[h] = byHood[h] || []).push(x); });
   const order = [s.hood, ...s.hoods.map((h) => h.name), 'Anywhere', ...Object.keys(byHood)].filter((h, idx, a) => byHood[h] && a.indexOf(h) === idx);
-  const row = (x) => `<div class="todo ${x.keep ? 'keep' : 'gone'} ${cap && (x.cost || 0) > cap ? 'pricey' : ''}"><button class="ck" data-keep="${x.id}" aria-label="${x.keep ? 'Remove' : 'Keep'}">${x.keep ? '✓' : ''}</button><div><div class="tn">${esc(x.name)}</div><div class="tm"><span class="type">${esc(TYPES[x.type] || x.type || 'Yours')}</span> ${x.hours ? hm(x.hours * 60) : ''}${x.cost ? ' · ' + gbp(x.cost) + 'pp' : ' · free'}${cap && (x.cost || 0) > cap ? ' · <span class="src bad">over £' + cap + '</span>' : ''}</div></div>${x.keep ? `<button class="tx" data-keep="${x.id}" aria-label="Remove">×</button>` : `<button class="pill sm" data-keep="${x.id}">Keep</button>`}</div>`;
+  const row = (x) => { const tp = x.custom ? null : todoPhoto(s, x); return `<div class="todo ${x.keep ? 'keep' : 'gone'} ${cap && (x.cost || 0) > cap ? 'pricey' : ''}"><button class="ck" data-keep="${x.id}" aria-label="${x.keep ? 'Remove' : 'Keep'}">${x.keep ? '✓' : ''}</button><div class="tw">${tp ? `<button class="tthumb" data-tph="${x.id}" aria-label="View photo"><img src="${esc(tp.thumb)}" alt="${esc(tp.alt || x.name)}" style="background:${esc(tp.color || '#ddd')}" loading="lazy"></button>` : ''}<div><div class="tn">${esc(x.name)}</div><div class="tm"><span class="type">${esc(TYPES[x.type] || x.type || 'Yours')}</span> ${x.hours ? hm(x.hours * 60) : ''}${x.cost ? ' · ' + gbp(x.cost) + 'pp' : ' · free'}${cap && (x.cost || 0) > cap ? ' · <span class="src bad">over £' + cap + '</span>' : ''}</div></div></div>${x.keep ? `<button class="tx" data-keep="${x.id}" aria-label="Remove">×</button>` : `<button class="pill sm" data-keep="${x.id}">Keep</button>`}</div>`; };
   const hrs = kept.reduce((a, x) => a + hrsOf(x), 0), spend = kept.reduce((a, x) => a + (x.cost || 0), 0);
   return `<div class="label"><span>${kept.length} kept · ~${hm(hrs * 60)} · ${gbp(spend)}pp</span></div>
   <div class="chips"><button class="pill sm ${V.filter === 'all' ? 'on' : ''}" data-filter="all">All</button><button class="pill sm ${V.filter === 'free' ? 'on' : ''}" data-filter="free">Free</button>${cap ? `<button class="pill sm ${V.filter === 'cap' ? 'on' : ''}" data-filter="cap">≤ £${cap}</button>` : ''}${types.map((x) => `<button class="pill sm ${V.filter === x ? 'on' : ''}" data-filter="${x}">${esc(TYPES[x] || x)}</button>`).join('')}</div>
@@ -1375,7 +1485,14 @@ function legSheet() {
   <form class="card pad" id="legform"><div class="grid2">
     <label class="field"><span>Time (h:mm)</span><input class="inp" id="lgt" value="${Math.floor(l.time / 60)}:${String(Math.round(l.time % 60)).padStart(2, '0')}"></label>
     <label class="field"><span>Cash price £ total</span><input class="inp" id="lgp" inputmode="decimal" value="${Math.round(l.price)}"></label></div>
-    <label class="field" style="margin-top:10px"><span>Note</span><input class="inp" id="lgn" value="${esc(l.note || '')}" placeholder="e.g. BA nonstop, booked"></label>
+    <label class="field" style="margin-top:10px"><span>Note</span><input class="inp" id="lgn" value="${esc(l.note || '')}" placeholder="e.g. BA nonstop"></label>
+    <div class="label" style="margin:18px 0 8px"><span>Booking</span><button type="button" class="tog ${l.booked ? 'on' : ''}" data-act="legbooked"><i></i>Booked</button></div>
+    <div class="grid2">
+      <label class="field"><span>${l.mode === 'flight' ? 'Flight' : l.mode === 'train' ? 'Train' : 'Service'} number</span><input class="inp" id="lgnum" value="${esc(l.num || '')}" placeholder="${l.mode === 'flight' ? 'BA7' : l.mode === 'train' ? 'Nozomi 21' : ''}" autocapitalize="characters"></label>
+      <label class="field"><span>Booking ref</span><input class="inp" id="lgref" value="${esc(l.ref || '')}" placeholder="ABC123" autocapitalize="characters"></label>
+      <label class="field"><span>Departs</span><input class="inp" type="time" id="lgdep" value="${esc(l.dep || '')}"></label>
+      <label class="field"><span>Arrives</span><div style="display:flex;gap:6px"><input class="inp" type="time" id="lgarr" value="${esc(l.arr || '')}"><select class="inp" id="lgday" style="width:74px">${[0, 1, 2].map((n) => `<option value="${n}" ${(l.arrDay || 0) === n ? 'selected' : ''}>${n ? '+' + n + 'd' : 'same'}</option>`).join('')}</select></div></label>
+    </div>
     <div class="cta"><button class="pill go">Save</button></div></form>
   ${mcp && d > 300 ? `<div class="label"><span>Live flights${date ? ' · ' + fmtD(date) : ''}</span><button class="pill sm" data-flights="${l.k}" ${V.busy['f' + l.k] ? 'disabled' : ''}>${lv ? 'Refresh' : 'Search SlickTrip'}</button></div>
     ${V.busy['f' + l.k] ? '<div class="busy">Searching fares…</div>' : ''}${V.err['f' + l.k] ? `<div class="err">${esc(V.err['f' + l.k])}</div>` : ''}
@@ -1421,11 +1538,21 @@ function tripsSheet() {
   <label class="field" style="margin-top:12px"><span>This trip's name</span><input class="inp" id="tname" value="${esc(t.name)}"></label>
   <div class="label"><span>All trips</span></div>
   <div class="card">${S.trips.map((x) => { const tt = totals(x); return `<button class="trow ${x.id === t.id ? 'on' : ''}" data-trip="${x.id}"><span><b>${esc(x.name)}</b><small>${x.stops.map((s) => esc(s.city)).join(' → ') || 'No stops yet'}${x.start ? ' · ' + fmtD(x.start) : ''}</small></span><span style="text-align:right"><b>${gbp(tt.cash)}</b><small>${tt.nights} nights${x.budget ? ' · ' + (tt.cash > x.budget ? 'over' : 'in') + ' budget' : ''}</small></span></button>`; }).join('')}</div>
+  ${webSync ? `<div class="label"><span>Share</span></div><div class="card"><button class="trow" data-act="sharelink"><span><b>${t.share ? 'Shared · view-only link' : 'Share a view-only link'}</b><small>${t.share ? 'Anyone with the link sees this trip, updated as you edit' : 'For whoever you\'re travelling with — they can look, not change'}</small></span><span>›</span></button></div>` : ''}
   <div class="label"><span>Move trips between versions</span></div>
   <div class="card pad"><p class="note" style="margin:0 0 10px">Copy your trips here, then paste them into the planner in Claude or on the website.</p>
     <div class="cta" style="margin-top:0"><button class="pill" data-act="export">Copy all trips</button></div>
     <form id="importform" style="margin-top:12px;display:grid;gap:8px"><textarea class="inp" id="importq" rows="3" placeholder="Paste trips copied from the other version" style="font-size:13px;resize:vertical"></textarea><div><button class="pill go">Import</button></div></form></div>
   <div class="cta"><button class="pill" data-act="dup">Duplicate this trip</button>${S.trips.length > 1 ? (V.confirm === 'deltrip' ? `<button class="pill go" data-act="deltrip">Delete “${esc(t.name)}”</button><button class="pill" data-act="noconfirm">Cancel</button>` : `<button class="pill" data-act="askdeltrip">Delete this trip</button>`) : ''}</div>`;
+}
+function shareSheet() {
+  const t = T(), url = shareUrl(t);
+  return `${head()}<div class="stitle">Share “${esc(t.name)}”</div><div class="ssub">A link that shows the route, day plans and bookings. People with it can look and save their own copy, but can't change yours.</div>
+  ${url ? `<div class="card pad" style="margin-top:14px"><input class="inp" readonly value="${esc(url)}" id="shareurl" onclick="this.select()">
+    <div class="cta"><button class="pill go" data-act="copylink">Copy link</button><a class="pill" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a><button class="pill ghost" data-act="unshare" style="color:var(--bad)">Stop sharing</button></div>
+    <p class="note">The link updates by itself as you change the trip. Your wallet balances and sync code are never included.</p></div>`
+  : `<div class="cta"><button class="pill go" data-act="mkshare" ${V.busy.share ? 'disabled' : ''}>${V.busy.share ? 'Creating…' : 'Create link'}</button></div>`}
+  ${V.err.share ? `<div class="err">${esc(V.err.share)}</div>` : ''}`;
 }
 function syncSheet() {
   const code = syncCode();
@@ -1467,10 +1594,15 @@ async function buildTrip(D) {
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button, [data-open], [data-openday]'); if (!b) { if (!e.target.closest('.addbox')) document.querySelectorAll('.sugg').forEach((x) => (x.innerHTML = '')); return; }
   const d = b.dataset, t = T();
+  if (V.ro) {
+    const view = d.tab || d.openday || d.open || d.leg || d.stab || d.day || d.filter || d.tph || d.photo != null;
+    if (!view && !['close', 'fit', 'zin', 'zout', 'play', 'gone', 'lclose', 'lprev', 'lnext', 'savecopy'].includes(d.act)) return;
+    if (d.open === 'home') return;
+  }
   const S_ = V.sheet?.k === 'stop' ? t.stops.find((x) => x.id === V.sheet.id) : null;
   if (d.tab) { V.tab = d.tab; if (V.sheet) { V.sheet = null; renderSheet(); } renderMain(); return scrollTo(0, 0); }
   if (d.openday) return openStop(d.openday, 'plan', +d.d);
-  if (d.open) return d.open === 'home' ? openSheet({ k: 'home' }) : openStop(d.open);
+  if (d.open) return d.open === 'home' ? openSheet({ k: 'home' }) : openStop(d.open, d.st);
   if (d.leg) return openLeg(d.leg);
   if (d.pick) { const c = JSON.parse(d.pick); $('#addq').value = ''; $('#addsugg').innerHTML = ''; return addCity(c); }
   if (d.home) { const c = JSON.parse(d.home); const h = makeStop(c.name, { ...c, nights: 0 }); h.id = 'home'; t.home = h; Object.keys(t.legs).forEach((k) => { if (k.startsWith('home>') || k.endsWith('>ret')) delete t.legs[k]; }); save(); M.sig = ''; return closeSheet(); }
@@ -1481,6 +1613,7 @@ document.addEventListener('click', (e) => {
   if (d.stab) { V.stab = d.stab; V.day = null; return renderSheet(); }
   if (d.day) { V.day = d.day === 'all' ? null : +d.day; return renderSheet(); }
   if (d.uns != null && S_) { const p = (PH.cache[keyOf(cityQ(S_))] || [])[+d.uns]; if (p) { S_.cover = p; usePhoto(p); save(); renderSheet(); renderMain(); } return; }
+  if (d.tph && S_) { const x = S_.todos.find((y) => y.id === d.tph), p = x && todoPhoto(S_, x, false); if (p) { V.light = { photo: p, title: x.name }; renderLight(); } return; }
   if (d.photo != null) { V.light = { sid: S_?.id, i: +d.photo }; return renderLight(); }
   if (d.hood && S_) { S_.hood = d.hood; save(); return renderSheet(); }
   if (d.keep && S_) { const x = S_.todos.find((y) => y.id === d.keep); if (x) { x.keep = !x.keep; if (x.keep && S_.days) { const j = S_.days.reduce((bi, day, i, a) => day.length < a[bi].length ? i : bi, 0); S_.days[j].push(x.id); } save(); renderSheet(); } return; }
@@ -1491,7 +1624,7 @@ document.addEventListener('click', (e) => {
   if (d.mode) { const l = legsOf(t).find((x) => x.k === V.sheet.id); t.legs[l.k] = { mode: d.mode, ...estLeg(l.a, l.b, d.mode, t), src: 'est', pay: 'cash' }; save(); return renderSheet(); }
   if (d.legpay || d.peak != null) { const l = legsOf(t).find((x) => x.k === V.sheet.id); const { a, b: bb, i, k, ...rest } = l; t.legs[l.k] = { ...rest, ...(d.legpay ? { pay: d.legpay } : { peak: d.peak === '1' }) }; save(); return renderSheet(); }
   if (d.flights) return liveFlights(d.flights);
-  if (d.fl != null) { const k = V.sheet.id, f = V.live[k]?.list[+d.fl]; if (f) { t.legs[k] = { mode: 'flight', time: f.mins || legsOf(t).find((x) => x.k === k)?.time || 0, price: f.price, note: `${f.airline}${f.stops ? ', ' + f.stops.toLowerCase() : ''}`, src: 'live', pay: 'cash' }; save(); renderSheet(); toast('Flight added to the route'); } return; }
+  if (d.fl != null) { const k = V.sheet.id, f = V.live[k]?.list[+d.fl]; if (f) { t.legs[k] = { mode: 'flight', time: f.mins || legsOf(t).find((x) => x.k === k)?.time || 0, price: f.price, note: `${f.airline.replace(/\s*[A-Z0-9]{2}\d{1,4}(\+[A-Z0-9]{2}\d{1,4})*$/, '')}${f.stops ? ', ' + f.stops.toLowerCase() : ''}`, src: 'live', pay: 'cash', ...flightTimes(f) }; save(); renderSheet(); toast('Flight added to the route'); } return; }
   if (d.idea != null) { const k = V.sheet.id, x = V.ideas[k]?.[+d.idea], l = legsOf(t).find((y) => y.k === k); if (x && l) { const at = l.b.ret ? t.stops.length : t.stops.findIndex((s) => s.id === l.b.id); closeSheet(); addCity({ name: x.city, country: x.country, lat: x.lat, lng: x.lng }, at < 0 ? t.stops.length : at); } return; }
   switch (d.act) {
     case 'close': return closeSheet();
@@ -1526,6 +1659,13 @@ document.addEventListener('click', (e) => {
     case 'dup': { const c = JSON.parse(JSON.stringify(t)); c.id = uid(); c.name = t.name + ' (copy)'; S.trips.unshift(c); S.cur = c.id; save(); return renderSheet(); }
     case 'askdeltrip': V.confirm = 'deltrip'; return renderSheet();
     case 'deltrip': S.trips = S.trips.filter((x) => x.id !== t.id); S.cur = S.trips[0]?.id; save(); M.sig = ''; return closeSheet();
+    case 'legbooked': { const l = legsOf(t).find((x) => x.k === V.sheet.id); if (l) { const { a, b: bb, i, k, ...rest } = l; t.legs[l.k] = { ...rest, booked: !l.booked }; save(); renderSheet(); } return; }
+    case 'staybooked': if (S_?.stay) { S_.stay.booked = !S_.stay.booked; save(); renderSheet(); } return;
+    case 'sharelink': V.err.share = ''; return openSheet({ k: 'share' });
+    case 'mkshare': V.busy.share = true; renderSheet(); createShare(t).then(() => { V.busy.share = false; renderSheet(); toast('Link ready'); }, (e) => { V.busy.share = false; V.err.share = e.message; renderSheet(); }); return;
+    case 'copylink': navigator.clipboard?.writeText(shareUrl(t)).then(() => toast('Link copied'), () => $('#shareurl')?.select()); return;
+    case 'unshare': stopShare(t).then(() => { renderSheet(); toast('Link turned off'); }); return;
+    case 'savecopy': return saveSharedCopy();
     case 'sync': V.err.sync = ''; return openSheet({ k: 'sync' });
     case 'syncon': setSyncCode(newCode()); V.busy.sync = true; renderSheet(); pushSync().then((ok) => { V.busy.sync = false; if (!ok) V.err.sync = 'Could not reach the sync service. Your trips are still saved here.'; renderSheet(); renderMain(); }); return;
     case 'syncnow': V.busy.sync = true; renderSheet(); pullSync().then((r) => { V.busy.sync = false; V.err.sync = r === 'error' ? 'Could not reach the sync service.' : ''; renderSheet(); if (r !== 'error') toast('Up to date'); }); return;
@@ -1550,6 +1690,7 @@ document.addEventListener('input', (e) => {
   if (el.id === 'tname') { T().name = el.value || 'Untitled trip'; save(); }
   if (el.dataset.w) { const [k, f] = el.dataset.w.split('.'); S.wallet[k][f] = num(el.value); save(); }
   if (el.dataset.tset && el.tagName === 'INPUT') { T()[el.dataset.tset] = num(el.value); save(); }
+  if (el.id === 'stayref') { const s = T().stops.find((x) => x.id === V.sheet?.id); if (s?.stay) { s.stay.ref = el.value.trim().toUpperCase(); save(); } }
   if (el.hasAttribute('data-legfee')) { const t = T(), l = legsOf(t).find((x) => x.k === V.sheet.id); const { a, b, i, k, ...rest } = l; t.legs[l.k] = { ...rest, fees: num(el.value) }; save(); }
 });
 document.addEventListener('change', (e) => {
@@ -1574,7 +1715,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('submit', (e) => {
   e.preventDefault(); const t = T();
   if (e.target.id === 'todoform') { const s = t.stops.find((x) => x.id === V.sheet?.id), v = $('#todoq').value.trim(); if (s && v) { const x = { id: uid(), name: v, hood: s.hood, type: '', hours: 1.5, cost: 0, keep: true, custom: true, lat: null, lng: null }; s.todos.unshift(x); if (s.days) s.days[0].push(x.id); save(); renderSheet(); } }
-  if (e.target.id === 'legform') { const k = V.sheet.id, l = legsOf(t).find((x) => x.k === k); const [hh, mm] = $('#lgt').value.split(':'); const time = (+hh || 0) * 60 + (+mm || 0); const { a, b, i, k: kk, ...rest } = l; t.legs[k] = { ...rest, time: time || l.time, price: num($('#lgp').value), note: $('#lgn').value.trim(), src: 'custom' }; save(); renderSheet(); toast('Saved'); }
+  if (e.target.id === 'legform') { const k = V.sheet.id, l = legsOf(t).find((x) => x.k === k); const [hh, mm] = $('#lgt').value.split(':'); const time = (+hh || 0) * 60 + (+mm || 0); const { a, b, i, k: kk, ...rest } = l; t.legs[k] = { ...rest, time: time || l.time, price: num($('#lgp').value), note: $('#lgn').value.trim(), num: $('#lgnum').value.trim().toUpperCase(), ref: $('#lgref').value.trim().toUpperCase(), dep: $('#lgdep').value, arr: $('#lgarr').value, arrDay: +$('#lgday').value || 0, src: rest.src === 'live' ? 'live' : 'custom' }; save(); renderSheet(); toast('Saved'); }
   if (e.target.id === 'syncform') {
     const code = $('#syncq').value.trim().toUpperCase().replace(/\s+/g, '');
     if (!/^[A-Z0-9-]{16,64}$/.test(code)) { V.err.sync = 'That doesn\'t look like a sync code.'; return renderSheet(); }

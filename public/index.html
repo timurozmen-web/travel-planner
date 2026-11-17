@@ -185,6 +185,7 @@ select.inp { appearance: none; background: var(--card) url("data:image/svg+xml,%
 body.ro .grip, body.ro .addbox, body.ro .cta, body.ro form, body.ro .set, body.ro .step, body.ro .tog, body.ro select.mv, body.ro .ck, body.ro .tx,
 body.ro .hb.rw, body.ro .cover .cb, body.ro [data-act="askdel"], body.ro .seg, body.ro .daychips + .cmap ~ .cta, body.ro .split input, body.ro .label .pill, body.ro .todo .pill { display: none !important; }
 body.ro .todo { grid-template-columns: minmax(0, 1fr) auto; }
+body.ro #stopnote, body.ro .pvbar { display: none !important; }
 body.ro .prow { grid-template-columns: 42px minmax(0, 1fr); padding-left: 12px; }
 .wx { display: inline-flex; align-items: baseline; gap: 3px; font: 600 12.5px/1 var(--f); color: var(--ink); white-space: nowrap; }
 .wx i { font-style: normal; color: var(--ink3); font-weight: 500; }
@@ -196,6 +197,54 @@ body.ro .prow { grid-template-columns: 42px minmax(0, 1fr); padding-left: 12px; 
 .wxbar small { display: block; color: var(--ink2); font-size: 12px; margin-top: 2px; }
 .wxbar small a { color: var(--ink2); }
 .wxbar > span:first-child:not(.wxbig) { flex: 1; font-size: 13px; color: var(--ink2); }
+.fxrow { margin-top: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px 12px; display: grid; }
+.fxrow > span { padding: 9px 0; font-size: 13px; color: var(--ink2); display: flex; justify-content: space-between; align-items: center; }
+.fxbtn { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; font-size: 13px; color: var(--ink2); width: 100%; }
+.fxbtn b { color: var(--ink); font-weight: 650; }
+.fxsrc { font-size: 11.5px; color: var(--ink3); }
+.fxconv { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: end; padding: 4px 0 8px; }
+.fxeq { padding-bottom: 12px; color: var(--ink3); }
+.fxnote { color: var(--ink3); font-size: 11px; padding-bottom: 8px; }
+.fxnote a { color: var(--ink3); }
+.entry { padding: 12px 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; justify-items: start; }
+.entry .et { display: flex; justify-content: space-between; width: 100%; align-items: baseline; gap: 8px; }
+.entry .et b { font: 650 15px/1.2 var(--f); }
+.entry .et small, .muted { color: var(--ink3); font-size: 12px; }
+.entry p { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.late { color: var(--bad); font-weight: 600; }
+.doc { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.doc:last-child { border-bottom: 0; }
+.doc .dicon { width: 38px; height: 38px; border-radius: 8px; background: var(--card2); display: grid; place-items: center; font: 700 10px/1 var(--f); color: var(--ink2); letter-spacing: .04em; }
+.doc a { color: inherit; text-decoration: none; min-width: 0; }
+.doc b { display: block; font: 600 14px/1.25 var(--f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc small { color: var(--ink2); font-size: 12px; }
+.doc .tx { color: var(--ink3); font-size: 18px; width: 28px; height: 28px; border-radius: 8px; text-align: center; }
+textarea.inp { resize: vertical; line-height: 1.45; font-size: 15px; }
+.pvbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 10px; }
+.hero { background: var(--ink); color: #fff; border-radius: var(--r); padding: 18px 18px 16px; display: grid; gap: 4px; }
+.hero small { color: rgba(255,255,255,.7); font: 600 11.5px/1.2 var(--f); text-transform: uppercase; letter-spacing: .08em; }
+.hero b { font: 650 30px/1.08 var(--f); letter-spacing: -.035em; }
+.hero span { color: rgba(255,255,255,.85); font-size: 13.5px; }
+.hero .wx, .hero .wx i { color: #fff; }
+.tcard { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: center; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sh); padding: 12px 14px; margin-bottom: 8px; }
+.tcard .ic { width: 32px; height: 32px; }
+.tcard small { display: block; color: var(--brand); font: 600 11.5px/1.2 var(--f); text-transform: uppercase; letter-spacing: .06em; }
+.tcard b { display: block; font: 650 15.5px/1.25 var(--f); margin-top: 2px; }
+.tcard .tc > span { font-size: 12.5px; color: var(--ink2); }
+.tcard .tc > span b { display: inline; font-size: 12.5px; color: var(--ink); }
+.trow2 { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.trow2:last-child { border-bottom: 0; }
+.trow2 .tm { font: 600 12.5px/1 var(--f); color: var(--ink2); }
+.trow2 b { display: block; font: 600 14.5px/1.25 var(--f); }
+.trow2 small { color: var(--ink2); font-size: 12px; }
+.trow2.past { opacity: .45; }
+.trow2.next, .trow2.now { background: var(--tint); box-shadow: inset 3px 0 0 var(--brand2); }
+.trow2.now small, .trow2.next small { color: var(--brand); font-weight: 600; }
+.tonight b { display: block; font: 650 16px/1.2 var(--f); }
+.tonight small { color: var(--ink2); font-size: 12.5px; }
+.ck2 { width: 14px; height: 14px; border: 1.5px solid var(--line2); border-radius: 4px; flex: none; }
+button.lnk { background: none; border: 0; padding: 0; color: var(--brand); font-weight: 600; font-size: 12.5px; cursor: pointer; }
+.label .pill, .label label.pill { text-transform: none; letter-spacing: 0; }
 .src.ok { background: var(--ok-soft); color: var(--ok); }
 .todo .tw { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .tthumb { flex: none; width: 54px; height: 54px; border-radius: 9px; overflow: hidden; }
@@ -446,6 +495,9 @@ amsterdam: [[52.373,4.893],[52.3752,4.884],[52.374,4.881],[52.3557,4.8946],[52.3
 newyork: [[40.7593,-73.9794],[40.7614,-73.9776],[40.759,-73.9845],[40.748,-74.0048],[40.731,-74.003],[40.7794,-73.9632],[40.7115,-74.0134],[40.7061,-73.9969],[40.721,-73.962]],
 london: [[51.5115,-0.13],[51.5194,-0.127],[51.5076,-0.0994],[51.5055,-0.091],[51.5113,-0.0836],[51.529,-0.069],[51.4966,-0.1722]],
 };
+/* Country name -> ISO currency, from GeoNames. */
+const CCY = {"Netherlands":"EUR","Czech Republic":"CZK","Andorra":"EUR","United Arab Emirates":"AED","Afghanistan":"AFN","Antigua and Barbuda":"XCD","Anguilla":"XCD","Albania":"ALL","Armenia":"AMD","Angola":"AOA","Argentina":"ARS","American Samoa":"USD","Austria":"EUR","Australia":"AUD","Aruba":"AWG","Aland Islands":"EUR","Azerbaijan":"AZN","Bosnia and Herzegovina":"BAM","Barbados":"BBD","Bangladesh":"BDT","Belgium":"EUR","Burkina Faso":"XOF","Bulgaria":"BGN","Bahrain":"BHD","Burundi":"BIF","Benin":"XOF","Saint Barthelemy":"EUR","Bermuda":"BMD","Brunei":"BND","Bolivia":"BOB","Bonaire, Saint Eustatius and Saba ":"USD","Brazil":"BRL","Bahamas":"BSD","Bhutan":"BTN","Bouvet Island":"NOK","Botswana":"BWP","Belarus":"BYN","Belize":"BZD","Canada":"CAD","Cocos Islands":"AUD","Democratic Republic of the Congo":"CDF","Central African Republic":"XAF","Republic of the Congo":"XAF","Switzerland":"CHF","Ivory Coast":"XOF","Cook Islands":"NZD","Chile":"CLP","Cameroon":"XAF","China":"CNY","Colombia":"COP","Costa Rica":"CRC","Cuba":"CUP","Cabo Verde":"CVE","Curacao":"XCG","Christmas Island":"AUD","Cyprus":"EUR","Czechia":"CZK","Germany":"EUR","Djibouti":"DJF","Denmark":"DKK","Dominica":"XCD","Dominican Republic":"DOP","Algeria":"DZD","Ecuador":"USD","Estonia":"EUR","Egypt":"EGP","Western Sahara":"MAD","Eritrea":"ERN","Spain":"EUR","Ethiopia":"ETB","Finland":"EUR","Fiji":"FJD","Falkland Islands":"FKP","Micronesia":"USD","Faroe Islands":"DKK","France":"EUR","Gabon":"XAF","United Kingdom":"GBP","Grenada":"XCD","Georgia":"GEL","French Guiana":"EUR","Guernsey":"GBP","Ghana":"GHS","Gibraltar":"GIP","Greenland":"DKK","Gambia":"GMD","Guinea":"GNF","Guadeloupe":"EUR","Equatorial Guinea":"XAF","Greece":"EUR","South Georgia and the South Sandwich Islands":"GBP","Guatemala":"GTQ","Guam":"USD","Guinea-Bissau":"XOF","Guyana":"GYD","Hong Kong":"HKD","Heard Island and McDonald Islands":"AUD","Honduras":"HNL","Croatia":"EUR","Haiti":"HTG","Hungary":"HUF","Indonesia":"IDR","Ireland":"EUR","Israel":"ILS","Isle of Man":"GBP","India":"INR","British Indian Ocean Territory":"USD","Iraq":"IQD","Iran":"IRR","Iceland":"ISK","Italy":"EUR","Jersey":"GBP","Jamaica":"JMD","Jordan":"JOD","Japan":"JPY","Kenya":"KES","Kyrgyzstan":"KGS","Cambodia":"KHR","Kiribati":"AUD","Comoros":"KMF","Saint Kitts and Nevis":"XCD","North Korea":"KPW","South Korea":"KRW","Kosovo":"EUR","Kuwait":"KWD","Cayman Islands":"KYD","Kazakhstan":"KZT","Laos":"LAK","Lebanon":"LBP","Saint Lucia":"XCD","Liechtenstein":"CHF","Sri Lanka":"LKR","Liberia":"LRD","Lesotho":"LSL","Lithuania":"EUR","Luxembourg":"EUR","Latvia":"EUR","Libya":"LYD","Morocco":"MAD","Monaco":"EUR","Moldova":"MDL","Montenegro":"EUR","Saint Martin":"EUR","Madagascar":"MGA","Marshall Islands":"USD","North Macedonia":"MKD","Mali":"XOF","Myanmar":"MMK","Mongolia":"MNT","Macao":"MOP","Northern Mariana Islands":"USD","Martinique":"EUR","Mauritania":"MRU","Montserrat":"XCD","Malta":"EUR","Mauritius":"MUR","Maldives":"MVR","Malawi":"MWK","Mexico":"MXN","Malaysia":"MYR","Mozambique":"MZN","Namibia":"NAD","New Caledonia":"XPF","Niger":"XOF","Norfolk Island":"AUD","Nigeria":"NGN","Nicaragua":"NIO","The Netherlands":"EUR","Norway":"NOK","Nepal":"NPR","Nauru":"AUD","Niue":"NZD","New Zealand":"NZD","Oman":"OMR","Panama":"PAB","Peru":"PEN","French Polynesia":"XPF","Papua New Guinea":"PGK","Philippines":"PHP","Pakistan":"PKR","Poland":"PLN","Saint Pierre and Miquelon":"EUR","Pitcairn":"NZD","Puerto Rico":"USD","Palestinian Territory":"ILS","Portugal":"EUR","Palau":"USD","Paraguay":"PYG","Qatar":"QAR","Reunion":"EUR","Romania":"RON","Serbia":"RSD","Russia":"RUB","Rwanda":"RWF","Saudi Arabia":"SAR","Solomon Islands":"SBD","Seychelles":"SCR","Sudan":"SDG","South Sudan":"SSP","Sweden":"SEK","Singapore":"SGD","Saint Helena":"SHP","Slovenia":"EUR","Svalbard and Jan Mayen":"NOK","Slovakia":"EUR","Sierra Leone":"SLE","San Marino":"EUR","Senegal":"XOF","Somalia":"SOS","Suriname":"SRD","Sao Tome and Principe":"STN","El Salvador":"USD","Sint Maarten":"XCG","Syria":"SYP","Eswatini":"SZL","Turks and Caicos Islands":"USD","Chad":"XAF","French Southern Territories":"EUR","Togo":"XOF","Thailand":"THB","Tajikistan":"TJS","Tokelau":"NZD","Timor Leste":"USD","Turkmenistan":"TMT","Tunisia":"TND","Tonga":"TOP","Turkey":"TRY","Trinidad and Tobago":"TTD","Tuvalu":"AUD","Taiwan":"TWD","Tanzania":"TZS","Ukraine":"UAH","Uganda":"UGX","United States Minor Outlying Islands":"USD","United States":"USD","Uruguay":"UYU","Uzbekistan":"UZS","Vatican":"EUR","Saint Vincent and the Grenadines":"XCD","Venezuela":"VES","British Virgin Islands":"USD","U.S. Virgin Islands":"USD","Vietnam":"VND","Vanuatu":"VUV","Wallis and Futuna":"XPF","Samoa":"WST","Yemen":"YER","Mayotte":"EUR","South Africa":"ZAR","Zambia":"ZMW","Zimbabwe":"ZWG","Serbia and Montenegro":"RSD","Netherlands Antilles":"ANG"};
+const CCY_NAME = {"EUR":"Euro","AED":"Dirham","AFN":"Afghani","XCD":"Dollar","ALL":"Lek","AMD":"Dram","AOA":"Kwanza","ARS":"Peso","USD":"Dollar","AUD":"Dollar","AWG":"Guilder","AZN":"Manat","BAM":"Marka","BBD":"Dollar","BDT":"Taka","XOF":"Franc","BGN":"Lev","BHD":"Dinar","BIF":"Franc","BMD":"Dollar","BND":"Dollar","BOB":"Boliviano","BRL":"Real","BSD":"Dollar","BTN":"Ngultrum","NOK":"Krone","BWP":"Pula","BYN":"Belarusian ruble","BZD":"Dollar","CAD":"Dollar","CDF":"Franc","XAF":"Franc","CHF":"Franc","NZD":"Dollar","CLP":"Peso","CNY":"Yuan Renminbi","COP":"Peso","CRC":"Colon","CUP":"Peso","CVE":"Escudo","XCG":"Guilder","CZK":"Koruna","DJF":"Franc","DKK":"Krone","DOP":"Peso","DZD":"Dinar","EGP":"Pound","MAD":"Dirham","ERN":"Nakfa","ETB":"Birr","FJD":"Dollar","FKP":"Pound","GBP":"Pound","GEL":"Lari","GHS":"Cedi","GIP":"Pound","GMD":"Dalasi","GNF":"Franc","GTQ":"Quetzal","GYD":"Dollar","HKD":"Dollar","HNL":"Lempira","HTG":"Gourde","HUF":"Forint","IDR":"Rupiah","ILS":"Shekel","INR":"Rupee","IQD":"Dinar","IRR":"Rial","ISK":"Krona","JMD":"Dollar","JOD":"Dinar","JPY":"Yen","KES":"Shilling","KGS":"Som","KHR":"Riels","KMF":"Franc","KPW":"Won","KRW":"Won","KWD":"Dinar","KYD":"Dollar","KZT":"Tenge","LAK":"Kip","LBP":"Pound","LKR":"Rupee","LRD":"Dollar","LSL":"Loti","LYD":"Dinar","MDL":"Leu","MGA":"Ariary","MKD":"Denar","MMK":"Kyat","MNT":"Tugrik","MOP":"Pataca","MRU":"Ouguiya","MUR":"Rupee","MVR":"Rufiyaa","MWK":"Kwacha","MXN":"Peso","MYR":"Ringgit","MZN":"Metical","NAD":"Dollar","XPF":"Franc","NGN":"Naira","NIO":"Cordoba","NPR":"Rupee","OMR":"Rial","PAB":"Balboa","PEN":"Sol","PGK":"Kina","PHP":"Peso","PKR":"Rupee","PLN":"Zloty","PYG":"Guarani","QAR":"Rial","RON":"Leu","RSD":"Dinar","RUB":"Ruble","RWF":"Franc","SAR":"Rial","SBD":"Dollar","SCR":"Rupee","SDG":"Pound","SSP":"Pound","SEK":"Krona","SGD":"Dollar","SHP":"Pound","SLE":"Leone","SOS":"Shilling","SRD":"Dollar","STN":"Dobra","SYP":"Pound","SZL":"Lilangeni","THB":"Baht","TJS":"Somoni","TMT":"Manat","TND":"Dinar","TOP":"Pa'anga","TRY":"Lira","TTD":"Dollar","TWD":"Dollar","TZS":"Shilling","UAH":"Hryvnia","UGX":"Shilling","UYU":"Peso","UZS":"Som","VES":"Bolivar Soberano","VND":"Dong","VUV":"Vatu","WST":"Tala","YER":"Rial","ZAR":"Rand","ZMW":"Kwacha","ZWG":"Zimbabwe Gold","ANG":"Guilder"};
 /* ---------------- Loyalty programmes ---------------- */
 const PROGS = {
   marriott: { name: 'Marriott Bonvoy', logo: 'logos/marriott.png', ppp: 0.6, earn: 13, re: /marriott|sheraton|westin|\bw (hotel|osaka|singapore|barcelona|london|tokyo)|^w |st\.? regis|ritz-carlton|\bedition\b|\bjw\b|m[eé]ridien|aloft|moxy|courtyard|renaissance|autograph|luxury collection|tribute portfolio|element|\bac hotel|four points|fairfield|delta hotels|residence inn|springhill|bulgari|gaylord|protea|design hotels/i },
@@ -575,6 +627,8 @@ function migrate() {
   S.trips.forEach((t) => {
     t.rooms ??= Math.max(1, Math.ceil(t.trav / 2)); t.cabin ??= 'economy'; t.budget ??= 0; t.hotelCap ??= 0; t.actCap ??= 0;
     t.legs ??= {};
+    t.notes ??= { text: '', reminders: [], docs: [], entry: null, nat: 'United Kingdom' };
+    t.notes.reminders ??= []; t.notes.docs ??= [];
     t.stops.forEach((s) => {
       s.photos ??= [];
       const p = packFor(s.city);
@@ -729,6 +783,37 @@ function dayStart(t, s, d) {
 }
 function timesFor(t, s, d) { let m = dayStart(t, s, d); const by = new Map(s.todos.map((x) => [x.id, x])); return (s.days[d] || []).map((id) => { const x = by.get(id); const st = m; m += hrsOf(x) * 60 + 30; return { x, st }; }).filter((r) => r.x); }
 
+/* ---------------- Money: live exchange rates (website /api/fx; in Claude, approximate rates from Claude) ---------------- */
+const FXS = { rates: null, at: 0, src: '', link: '', fetched: 0, off: false, pending: false, approx: false };
+try { Object.assign(FXS, JSON.parse(localStorage.getItem('journeys-planner-fx') || '{}'), { off: false, pending: false }); } catch {}
+function fxLoad() {
+  if (FXS.off || FXS.pending || (FXS.rates && !FXS.approx && Date.now() - FXS.fetched < 6 * 3600e3)) return;
+  FXS.pending = true;
+  fetch('/api/fx').then((r) => { if (!(r.headers.get('content-type') || '').includes('json')) { FXS.off = true; throw new Error('off'); } return r.ok ? r.json() : null; })
+    .then((j) => { if (j?.rates) { Object.assign(FXS, { rates: j.rates, at: j.at, src: j.source, link: j.link, fetched: Date.now(), approx: false }); fxSave(); photoRefresh(); } })
+    .catch(() => {}).finally(() => { FXS.pending = false; });
+}
+const fxSave = () => { try { localStorage.setItem('journeys-planner-fx', JSON.stringify({ rates: FXS.rates, at: FXS.at, src: FXS.src, link: FXS.link, fetched: FXS.fetched, approx: FXS.approx })); } catch {} };
+const ccyOf = (s) => (s && CCY[s.country]) || null;
+const fxRate = (ccy) => ccy && ccy !== 'GBP' ? FXS.rates?.[ccy] || null : null;
+function money(v, ccy) { try { return new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, currencyDisplay: 'narrowSymbol', maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2, minimumFractionDigits: 0 }).format(v); } catch { return Math.round(v).toLocaleString('en-GB') + ' ' + ccy; } }
+const loc = (gbpAmt, s) => { const c = ccyOf(s), r = fxRate(c); return r && gbpAmt ? money(gbpAmt * r, c) : ''; };
+async function fxFromClaude(t) {
+  const want = [...new Set(t.stops.map(ccyOf).filter((c) => c && c !== 'GBP'))]; if (!want.length) return;
+  const j = await askJSON(`Approximate exchange rates: how many units of each currency does £1 (GBP) buy? Currencies: ${want.join(', ')}. Return ONLY JSON {"rates":{"CODE":number}}`, 'quick');
+  if (!j?.rates) throw new Error('No rates came back');
+  FXS.rates = { ...(FXS.rates || {}), ...j.rates, GBP: 1 }; FXS.approx = true; FXS.src = 'Claude (approximate)'; FXS.at = Date.now(); FXS.fetched = Date.now(); fxSave();
+}
+function fxRow(t, s) {
+  const c = ccyOf(s); if (!c || c === 'GBP') return '';
+  fxLoad(); const r = fxRate(c);
+  if (!r) return FXS.off && canAI() ? `<div class="fxrow"><span>${esc(CCY_NAME[c] || c)}</span><button class="pill sm" data-act="fxclaude" ${V.busy.fx ? 'disabled' : ''}>${V.busy.fx ? 'Asking…' : 'Get rate'}</button></div>` : '';
+  const open = V.fxOpen === s.id;
+  return `<div class="fxrow"><button class="fxbtn" data-act="fxopen"><span><b>£1 = ${money(r, c)}</b> · ${esc(CCY_NAME[c] || c)}</span><span class="fxsrc">${FXS.approx ? 'approx.' : 'live'} ›</span></button>
+    ${open ? `<div class="fxconv"><label class="field"><span>${esc(c)}</span><input class="inp" inputmode="decimal" id="fxl" data-ccy="${c}" placeholder="${money(r * 10, c)}"></label><span class="fxeq">=</span><label class="field"><span>GBP</span><input class="inp" inputmode="decimal" id="fxg" data-ccy="${c}" placeholder="£10"></label></div>
+    <small class="fxnote">${esc(FXS.src || '')}${FXS.at ? ' · ' + new Date(FXS.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}${FXS.link ? ` · <a href="${esc(FXS.link)}" target="_blank" rel="noopener">source</a>` : ''}</small>` : ''}</div>`;
+}
+
 /* ---------------- Weather (website: /api/weather via Open-Meteo; in Claude: typical weather from Claude) ---------------- */
 const WX = { cache: {}, pending: {}, off: false };
 try { WX.cache = JSON.parse(localStorage.getItem('journeys-planner-wx') || '{}') || {}; } catch {}
@@ -770,7 +855,7 @@ const icsEsc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\;')
 const icsFold = (line) => { const out = []; let cur = ''; for (const ch of line) { if (new TextEncoder().encode(cur + ch).length > 74) { out.push(cur); cur = ' ' + ch; } else cur += ch; } out.push(cur); return out.join('\r\n'); };
 const icsDate = (iso) => iso.replace(/-/g, '');
 const icsDT = (iso, min) => `${icsDate(iso)}T${String(Math.floor(min / 60) % 24).padStart(2, '0')}${String(min % 60).padStart(2, '0')}00`;
-function buildICS(t, withActs = true) {
+function buildICS(t, withActs = true, withReminders = true) {
   const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z'), ev = [];
   const add = (uid, f) => ev.push(['BEGIN:VEVENT', `UID:${uid}@journeys-planner`, `DTSTAMP:${now}`, ...f, 'END:VEVENT']);
   const dates = stopDates(t), dts = legDates(t);
@@ -793,6 +878,7 @@ function buildICS(t, withActs = true) {
       add(`${t.id}-act-${r.x.id}`, [`DTSTART:${icsDT(day, r.st)}`, `DTEND:${icsDT(dayAdd(day, Math.floor(end / 1440)), Math.round(end % 1440))}`, `SUMMARY:${icsEsc(r.x.name)}`, `LOCATION:${icsEsc([r.x.hood, s.city].filter(Boolean).join(', '))}`, ...(r.x.lat != null ? [`GEO:${r.x.lat};${r.x.lng}`] : []), `DESCRIPTION:${icsEsc([r.x.cost ? '£' + r.x.cost + ' per person' : 'Free', 'Planned in Journeys Planner'].join('\n'))}`]);
     })); }
   });
+  if (withReminders) (t.notes?.reminders || []).filter((r) => r.due && !r.done).forEach((r) => add(`${t.id}-rem-${r.id}`, [`DTSTART;VALUE=DATE:${icsDate(r.due)}`, `DTEND;VALUE=DATE:${icsDate(dayAdd(r.due, 1))}`, `SUMMARY:${icsEsc('Reminder: ' + r.text)}`, 'TRANSP:TRANSPARENT']));
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Journeys Planner//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icsEsc(t.name)}`, ...ev.flat(), 'END:VCALENDAR'].map(icsFold).join('\r\n') + '\r\n';
 }
 async function downloadICS(t) {
@@ -890,20 +976,20 @@ async function uploadBlob(blob) {
 /* ---------------- Share links (website only) ---------------- */
 let shareT = null;
 function shareDoc(t) {
-  const c = JSON.parse(JSON.stringify(t)); delete c.share;
+  const c = JSON.parse(JSON.stringify(t)); delete c.share; delete c.notes;
   const packs = {}; [t.home, ...t.stops].forEach((s) => { const k = keyOf(s.city); if (S.packs[k]) packs[k] = S.packs[k]; });
   return JSON.stringify({ trip: c, packs, sharedBy: 'Journeys Planner' });
 }
 const shareUrl = (t) => t.share ? `${location.origin}/?trip=${t.share.id}` : '';
 const calUrl = (t) => t.share ? `webcal://${location.host}/api/cal/${t.share.id}.ics` : '';
 async function createShare(t) {
-  const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: shareDoc(t), ics: buildICS(t, t.calActs !== false) }) });
+  const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: shareDoc(t), ics: buildICS(t, t.calActs !== false, false) }) });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Could not create the link');
   t.share = { id: j.id, token: j.token }; save();
 }
 function updateShareSoon(t) {
   if (!t?.share || !webSync) return; clearTimeout(shareT);
-  shareT = setTimeout(() => fetch('/api/share?id=' + t.share.id, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-share-token': t.share.token }, body: JSON.stringify({ doc: shareDoc(t), ics: buildICS(t, t.calActs !== false) }) }).catch(() => {}), 1500);
+  shareT = setTimeout(() => fetch('/api/share?id=' + t.share.id, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-share-token': t.share.token }, body: JSON.stringify({ doc: shareDoc(t), ics: buildICS(t, t.calActs !== false, false) }) }).catch(() => {}), 1500);
 }
 async function stopShare(t) {
   if (!t.share) return;
@@ -941,7 +1027,7 @@ async function boot() {
   if (sid) return bootShared(sid);
   loadLocal();
   if (!S.trips.length) demoTrip();
-  migrate(); render();
+  migrate(); if (T()?.start && todayISO() >= T().start && todayISO() <= tripEnd(T())) V.tab = 'today'; render();
   const use = window.claude?.use ? (n) => window.claude.use(n).catch(() => null) : async () => null;
   if (!window.claude?.use) probeWeb();
   use('sample').then((s) => { sample = s; if (!V.play) refresh(); });
@@ -965,21 +1051,26 @@ async function boot() {
 /* ---------------- Main view ---------------- */
 function render() { renderMain(); renderSheet(); }
 function refresh() { if (V.sheet) { renderSheet(); } else renderMain(); }
+const todayISO = () => new Date().toLocaleDateString('en-CA');
+const tripEnd = (t) => dayAdd(t.start, t.stops.reduce((a, s) => a + s.nights, 0));
+const inTrip = (t, iso = todayISO()) => t.start && iso >= dayAdd(t.start, -7) && iso <= dayAdd(tripEnd(t), 1);
+function tabList(t) { return [...(V.preview || inTrip(t) ? [['today', 'Today']] : []), ['route', 'Route'], ['plan', 'Plan'], ['budget', 'Budget'], ...(V.ro ? [] : [['notes', 'Notes']])]; }
 function renderMain() {
   const t = T(); if (!t) return;
+  if (!tabList(t).some(([k]) => k === V.tab)) V.tab = 'route';
   const tab = V.tab;
   let html = `<header class="top">
     <div style="min-width:0"><div class="eyebrow">${V.ro ? 'Shared trip · view only' : 'Journeys planner'}</div><h1><button data-act="trips">${esc(t.name)}</button></h1><div class="save" id="savest">${V.ro ? (V.sharedAt ? 'Updated ' + new Date(V.sharedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') : saveLabel()}</div></div>
     ${V.ro ? '<div class="hb"><button class="pill go" data-act="savecopy">Save a copy</button></div>' : ''}<div class="hb ${V.ro ? 'rw' : ''}"><button class="pill" data-act="trips">Trips</button><button class="pill" data-act="wallet">Wallet</button>${webSync ? `<button class="pill ${syncCode() ? '' : 'go'}" data-act="sync" aria-label="Sync">${syncCode() ? '⟳' : 'Sync'}</button>` : ''}</div>
   </header>
-  <nav class="tabs" role="tablist">${[['route', 'Route'], ['plan', 'Plan'], ['budget', 'Budget']].map(([k, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</nav>`;
-  if (tab !== 'budget') html += `<div class="mapbox" id="mapbox"><svg id="map"></svg>
+  <nav class="tabs" role="tablist" style="grid-template-columns:repeat(${tabList(t).length},1fr)">${tabList(t).map(([k, n]) => `<button role="tab" class="${tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</nav>`;
+  if (tab === 'route' || tab === 'plan') html += `<div class="mapbox" id="mapbox"><svg id="map"></svg>
     <div class="mapctl"><button class="go" data-act="play" aria-label="${V.play ? 'Stop' : 'Play route'}">${V.play ? '■' : '▶'}</button><button data-act="fit" aria-label="Fit route">⤢</button><button data-act="zin" aria-label="Zoom in">+</button><button data-act="zout" aria-label="Zoom out">−</button></div>
     <div id="mapfoot">${V.play ? '' : `<div class="legend"><span><i class="f"></i>Flight</span><span><i class="t"></i>Train</span><span><i class="d"></i>Road</span><span><i class="fe"></i>Ferry</span></div>`}</div>
   </div>`;
-  html += tab === 'route' ? routeView(t) : tab === 'plan' ? planView(t) : budgetView(t);
+  html += tab === 'route' ? routeView(t) : tab === 'plan' ? planView(t) : tab === 'notes' ? notesView(t) : tab === 'today' ? todayView(t) : budgetView(t);
   $('#main').innerHTML = html;
-  if (tab !== 'budget') drawMap();
+  if (tab === 'route' || tab === 'plan') drawMap();
 }
 function budgetBar(t, tot, asButton = true) {
   if (!t.budget) return asButton ? `<button class="bud" data-tab="budget"><div class="bt"><span>No spend limit set</span><b style="color:var(--brand)">Set a budget →</b></div></button>` : '';
@@ -1055,7 +1146,7 @@ function legRow(t, l) {
 
 /* ---------------- Plan view (whole trip) ---------------- */
 function planView(t) {
-  const legs = legsOf(t), dates = stopDates(t); let dn = 0, html = `<div class="label"><span>Day by day</span><button class="pill sm" data-act="cal">＋ Add to calendar</button></div>`;
+  const legs = legsOf(t), dates = stopDates(t); let dn = 0, html = `<div class="label"><span>Day by day</span><span class="hb"><button class="pill sm" data-act="preview">Trip-day view</button><button class="pill sm" data-act="cal">＋ Calendar</button></span></div>`;
   t.stops.forEach((s, i) => {
     syncDays(t, s);
     const inLeg = legs.find((l) => l.b.id === s.id);
@@ -1070,6 +1161,100 @@ function planView(t) {
   const back = legs.find((l) => l.b.ret);
   if (back) html += `<div class="day"><div class="dh"><span><b>Day ${dn + 1} · Home</b><small>${fmtD(dayAdd(t.start, totals(t).nights))}</small></span></div><div class="pfix"><span class="ic ${back.mode}">${ICON[back.mode]}</span><span><b>${MODE_NAME[back.mode]} ${esc(back.a.city)} → ${esc(back.b.city)}</b>${back.num ? ' ' + esc(back.num) : ''} · ${back.dep && back.arr ? esc(back.dep) + ' → ' + esc(back.arr) + (back.arrDay ? ' +' + back.arrDay : '') : hm(back.time)}${back.ref ? ' · ref ' + esc(back.ref) : ''}${back.booked ? ' <span class="src ok">✓ Booked</span>' : ''}</span></div></div>`;
   if (!t.stops.length) html += `<div class="card empty">Add a destination on the Route tab to start planning days.</div>`;
+  return html;
+}
+
+/* ---------------- Notes view: entry requirements, reminders, documents, notes ---------------- */
+const FCDO_SLUG = { 'United States': 'usa', 'Czechia': 'czech-republic', 'The Netherlands': 'netherlands', 'Ivory Coast': 'cote-d-ivoire' };
+const fcdo = (country) => `https://www.gov.uk/foreign-travel-advice/${FCDO_SLUG[country] || keyOf(country) && country.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`;
+function countriesOf(t) { const seen = new Map(), dates = stopDates(t); t.stops.forEach((s, i) => { if (!s.country || s.country === t.home.country) return; const c = seen.get(s.country); if (c) c.out = dates[i].out; else seen.set(s.country, { country: s.country, in: dates[i].in, out: dates[i].out }); }); return [...seen.values()]; }
+function docLink(t, k) { if (k === 'trip') return 'Whole trip'; const l = legsOf(t).find((x) => x.k === k); if (l) return `${MODE_NAME[l.mode]} ${l.a.city} → ${l.b.city}`; const s = t.stops.find((x) => x.id === k); return s ? s.city : 'Whole trip'; }
+const docIcon = (d) => d.type === 'application/pdf' ? 'PDF' : 'IMG';
+function docsList(t, filter, compact) {
+  const list = t.notes.docs.filter((d) => !filter || d.link === filter);
+  if (!list.length) return compact ? '' : '<div class="empty">No documents yet. Add booking confirmations, tickets or insurance.</div>';
+  return list.map((d) => `<div class="doc"><span class="dicon">${docIcon(d)}</span><a href="${esc(d.url)}" target="_blank" rel="noopener"><b>${esc(d.name)}</b><small>${compact ? '' : esc(docLink(t, d.link)) + ' · '}${d.size ? Math.max(1, Math.round(d.size / 1024)) + ' KB' : ''}</small></a>${compact || V.ro ? '' : `<button class="tx" data-deldoc="${d.id}" aria-label="Remove ${esc(d.name)}">×</button>`}</div>`).join('');
+}
+function notesView(t) {
+  const N = t.notes, cs = countriesOf(t), today = todayISO();
+  const ent = N.entry?.nat === N.nat ? N.entry : null;
+  const rem = [...N.reminders].sort((x, y) => (x.done - y.done) || String(x.due || '9').localeCompare(String(y.due || '9')));
+  const links = [['trip', 'Whole trip'], ...legsOf(t).map((l) => [l.k, `${MODE_NAME[l.mode]} ${l.a.city} → ${l.b.city}`]), ...t.stops.map((s) => [s.id, s.city])];
+  const nats = Object.keys(CCY).sort();
+  return `<div class="label"><span>Entry requirements</span>${canAI() && cs.length ? `<button class="pill sm" data-act="entry" ${V.busy.entry ? 'disabled' : ''}>${V.busy.entry ? 'Checking…' : ent ? 'Check again' : 'Check with Claude'}</button>` : ''}</div>
+  <div class="card">
+    <div class="pfix"><span>Passport</span><select class="inp sm" id="nat" style="margin-left:auto;max-width:200px">${nats.map((n) => `<option ${n === N.nat ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+    ${cs.length ? cs.map((c) => { const r = ent?.countries?.find((x) => keyOf(x.country) === keyOf(c.country)); const due = r?.applyDaysBefore ? dayAdd(c.in, -r.applyDaysBefore) : null;
+      return `<div class="entry"><div class="et"><b>${esc(c.country)}</b><small>${fmtD(c.in)} → ${fmtD(c.out)}</small></div>
+      ${r ? `<span class="src ${r.status === 'none' ? 'ok' : r.status === 'visa' ? 'bad' : 'av'}">${r.status === 'none' ? 'No visa needed' : r.status === 'eta' ? 'Travel authorisation' : r.status === 'visa' ? 'Visa needed' : 'Check'}</span>
+        <p>${esc(r.summary || '')}${r.passport ? `<br><span class="muted">Passport: ${esc(r.passport)}</span>` : ''}</p>
+        ${r.action ? `<div class="cta" style="margin-top:6px"><button class="pill sm go" data-addrem="${esc(r.action)}" data-due="${due || ''}">＋ Reminder${due ? ' for ' + fmtD(due) : ''}</button></div>` : ''}` : `<p class="muted">${canAI() ? 'Not checked yet.' : ''}</p>`}
+      ${N.nat === 'United Kingdom' ? `<a class="lnk" href="${esc(fcdo(c.country))}" target="_blank" rel="noopener">Official UK travel advice for ${esc(c.country)} ↗</a>` : ''}</div>`; }).join('') : '<div class="empty">All your stops are in your home country.</div>'}
+    ${ent ? `<p class="note" style="padding:0 14px 12px;margin:0">From Claude, checked ${new Date(ent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}. Rules change, so confirm on the official page before you book.</p>` : ''}
+  </div>
+  <div class="label"><span>Reminders</span><span class="r">${rem.filter((r) => !r.done).length} to do</span></div>
+  <div class="card">${rem.map((r) => `<div class="todo ${r.done ? 'keep gone' : ''}"><button class="ck" data-remdone="${r.id}" aria-label="${r.done ? 'Mark not done' : 'Mark done'}">${r.done ? '✓' : ''}</button><div><div class="tn">${esc(r.text)}</div><div class="tm">${r.due ? `<span class="${!r.done && r.due < today ? 'late' : ''}">${!r.done && r.due < today ? 'Overdue · ' : 'By '}${fmtD(r.due)}</span>` : 'No date'}</div></div><button class="tx" data-delrem="${r.id}" aria-label="Delete">×</button></div>`).join('') || '<div class="empty">Nothing yet. Add things like insurance, eSIM or seat selection.</div>'}
+    <form class="addrow pad" id="remform" style="border-top:1px solid var(--line);flex-wrap:wrap"><input class="inp" id="remq" placeholder="Add a reminder, e.g. Book eSIM" style="flex-basis:100%"><input class="inp" type="date" id="remd" aria-label="Due date" style="flex:1"><button class="pill go">Add</button></form></div>
+  <div class="label"><span>Documents</span>${canUpload() ? `<label class="pill sm">${V.busy.doc ? 'Uploading…' : '＋ Add'}<input type="file" accept="application/pdf,image/*" id="docin" hidden></label>` : ''}</div>
+  <div class="card">${canUpload() ? `<div class="pfix"><span>Attach next upload to</span><select class="inp sm" id="doclink" style="margin-left:auto;max-width:210px">${links.map(([k, n]) => `<option value="${esc(k)}" ${V.docLink === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : ''}${docsList(t)}</div>
+  ${!canUpload() ? '<p class="note">Documents need the Claude version or sync turned on.</p>' : ''}
+  <div class="label"><span>Trip notes</span></div>
+  <textarea class="inp" id="tripnote" rows="5" placeholder="Anything worth remembering: addresses, who's booking what, restaurant reservations…">${esc(N.text || '')}</textarea>`;
+}
+async function checkEntry(t) {
+  const N = t.notes, cs = countriesOf(t); if (!cs.length) return;
+  const list = cs.map((c) => `${c.country}: ${c.in} to ${c.out} (${Math.max(1, Math.round((Date.parse(c.out) - Date.parse(c.in)) / 864e5))} days)`).join('\n');
+  const j = await askJSON(`A tourist holding a ${N.nat} passport, living in ${t.home.country}, is visiting:\n${list}\nFor each country say what they need to enter as a tourist for that stay.
+Return ONLY JSON {"countries":[{"country":string,"status":"none|eta|visa|other","summary":"max 22 words: visa or electronic travel authorisation needed and how long they can stay","action":"short action to take, e.g. 'Apply for K-ETA online', or empty","applyDaysBefore":number or null (a sensible latest time to apply, in days before arrival),"passport":"validity rule, max 12 words"}]}
+Only state what you are confident about; if the rules were changing as of your knowledge, say so in the summary.`, 'default');
+  if (!Array.isArray(j?.countries)) throw new Error('No answer came back');
+  N.entry = { nat: N.nat, at: Date.now(), countries: j.countries };
+}
+async function addDoc(file) {
+  const t = T(); if (!file) return;
+  if (!assets && !syncCode()) { toast('Turn on sync first — documents are stored with your synced trips'); return openSheet({ k: 'sync' }); }
+  if (file.size > 4e6 && !assets) return toast('Files must be under 4 MB');
+  V.busy.doc = true; renderMain();
+  try {
+    const blob = file.type.startsWith('image/') ? await shrink(file, 2200) : file;
+    const r = await uploadBlob(blob.type ? blob : new Blob([blob], { type: file.type || 'application/pdf' }));
+    t.notes.docs.unshift({ id: r.id, url: r.url, name: file.name || 'Document', type: file.type || blob.type, size: blob.size, link: V.docLink || 'trip', at: Date.now() });
+    save(); toast('Document added');
+  } catch (e) { toast(e?.message || 'Could not add that file'); }
+  V.busy.doc = false; renderMain();
+}
+
+/* ---------------- Today view (on the trip) ---------------- */
+const mapsLink = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+const until = (mins) => mins <= 0 ? 'now' : mins < 60 ? `in ${mins}m` : `in ${Math.floor(mins / 60)}h${mins % 60 ? ' ' + (mins % 60) + 'm' : ''}`;
+function todayView(t) {
+  const iso = V.preview || todayISO(), real = !V.preview, nowMin = real ? new Date().getHours() * 60 + new Date().getMinutes() : 13 * 60;
+  const dates = stopDates(t), legs = legsOf(t), ldates = legDates(t), end = tripEnd(t);
+  const pv = `<div class="pvbar"><label class="lbl">${real ? 'Preview a day' : 'Previewing'} <input class="inp sm" type="date" id="pvdate" min="${dayAdd(t.start, -1)}" max="${end}" value="${iso}"></label>${real ? '' : '<button class="pill sm" data-act="pvoff">Back to today</button>'}</div>`;
+  const legCard = (l, i, label) => { const dep = toMin(l.dep); return `<button class="tcard" data-leg="${l.k}"><span class="ic ${l.mode}">${ICON[l.mode]}</span><span class="tc"><small>${label}${real && dep != null && ldates[i] === iso ? ' · ' + until(dep - nowMin) : ''}</small><b>${MODE_NAME[l.mode]} ${esc(l.a.city)} → ${esc(l.b.city)}${l.num ? ' · ' + esc(l.num) : ''}</b><span>${l.dep ? esc(l.dep) + (l.arr ? ' → ' + esc(l.arr) + (l.arrDay ? ' +' + l.arrDay : '') : '') : hm(l.time)}${l.ref ? ' · ref <b>' + esc(l.ref) + '</b>' : ''}${l.booked ? ' · ✓ booked' : ' · not booked'}</span></span></button>`; };
+  if (iso < t.start) {
+    const n = Math.round((Date.parse(t.start) - Date.parse(iso)) / 864e5), first = legs[0], due = t.notes.reminders.filter((r) => !r.done).sort((x, y) => String(x.due || '9').localeCompare(String(y.due || '9')));
+    return `${pv}<div class="hero"><small>${esc(t.name)}</small><b>${n === 1 ? 'Tomorrow' : n + ' days to go'}</b><span>${fmtD(t.start)} · ${t.stops.map((s) => esc(s.city)).join(' → ')}</span></div>
+      ${first ? `<div class="label"><span>First up</span></div>${legCard(first, 0, fmtD(t.start))}` : ''}
+      ${due.length ? `<div class="label"><span>Before you go</span><button class="pill sm ghost" data-tab="notes">All notes ›</button></div><div class="card">${due.slice(0, 5).map((r) => `<div class="pfix"><span class="ck2"></span><span><b>${esc(r.text)}</b>${r.due ? ` · <span class="${r.due < iso ? 'late' : ''}">${fmtD(r.due)}</span>` : ''}</span></div>`).join('')}</div>` : ''}
+      ${t.stops[0] ? (() => { const w = wxSum(t, t.stops[0], 0); return w ? `<div class="label"><span>Weather in ${esc(t.stops[0].city)}</span></div><div class="wxbar" style="margin-top:0"><span class="wxbig">${wxIcon({ wet: w.wet / Math.max(1, w.n), rain: w.rain })} ${Math.round(w.hi)}°<i>/${Math.round(w.lo)}°</i></span><span><b>${w.kind === 'forecast' ? 'Forecast' : 'Typical for your dates'}</b><small>${w.wet ? `Rain likely on ~${w.wet} of ${w.n} days` : 'Mostly dry'}</small></span></div>` : ''; })() : ''}`;
+  }
+  if (iso > end) { const tot = totals(t); return `${pv}<div class="hero"><small>${esc(t.name)}</small><b>Welcome home</b><span>${tot.nights} nights · ${t.stops.length} stop${t.stops.length === 1 ? '' : 's'} · ${gbp(tot.cash)}</span></div>`; }
+  const dayN = Math.round((Date.parse(iso) - Date.parse(t.start)) / 864e5) + 1, total = t.stops.reduce((a, s) => a + s.nights, 0) + 1;
+  const si = t.stops.findIndex((s, i) => dates[i].in <= iso && iso < dates[i].out), s = t.stops[si];
+  const travelling = legs.map((l, i) => [l, i]).filter(([l, i]) => ldates[i] === iso);
+  let html = `${pv}<div class="hero"><small>Day ${dayN} of ${total} · ${fmtD(iso)}</small><b>${s ? esc(s.city) : travelling.length ? 'Travel day' : esc(t.home.city)}</b>${s ? `<span>${(() => { const w = wxDay(t, s, si, Math.round((Date.parse(iso) - Date.parse(dates[si].in)) / 864e5)); return w ? wxChip(w) + ' · ' : ''; })()}${s.hood ? 'Based in ' + esc(s.hood) : ''}${loc(1, s) ? ' · £1 = ' + loc(1, s) : ''}</span>` : ''}</div>`;
+  if (travelling.length) html += `<div class="label"><span>Travelling today</span></div>${travelling.map(([l, i]) => legCard(l, i, 'Today')).join('')}`;
+  if (s) {
+    syncDays(t, s); const d = Math.round((Date.parse(iso) - Date.parse(dates[si].in)) / 864e5), rows = timesFor(t, s, d);
+    const nextIdx = rows.findIndex((r) => r.st + hrsOf(r.x) * 60 > nowMin);
+    html += `<div class="label"><span>Today's plan</span><button class="pill sm ghost" data-openday="${s.id}" data-d="${d}">Edit ›</button></div><div class="card">${rows.map((r, j) => { const endM = r.st + hrsOf(r.x) * 60, state = endM <= nowMin ? 'past' : j === nextIdx ? (r.st <= nowMin ? 'now' : 'next') : '';
+      return `<div class="trow2 ${state}"><span class="tm">${clock(r.st)}</span><span class="tb"><b>${esc(r.x.name)}</b><small>${state === 'now' ? 'Now · ' : state === 'next' ? (real ? 'Next · ' + until(r.st - nowMin) + ' · ' : 'Next · ') : ''}${esc(r.x.hood || '')}${r.x.cost ? ' · ' + gbp(r.x.cost) + 'pp' + (loc(r.x.cost, s) ? ' (' + loc(r.x.cost, s) + ')' : '') : ''}</small></span><a class="lnk" href="${esc(mapsLink(r.x.name + ', ' + s.city))}" target="_blank" rel="noopener">Map</a></div>`; }).join('') || `<div class="empty">Nothing planned${d === 0 ? ' — arrival day' : ''}. <button class="lnk" data-openday="${s.id}" data-d="${d}">Plan this day ›</button></div>`}</div>`;
+    if (s.stay) html += `<div class="label"><span>Tonight</span></div><div class="card pad tonight"><b>${esc(s.stay.name)}</b><small>${esc(s.stay.hood || s.hood || '')}${s.stay.ref ? ' · Confirmation <b>' + esc(s.stay.ref) + '</b>' : ''}${s.stay.booked ? ' · ✓ booked' : ' · not booked yet'}</small><div class="cta" style="margin-top:8px"><a class="pill sm" href="${esc(mapsLink(s.stay.name + ', ' + s.city))}" target="_blank" rel="noopener">Directions ↗</a>${docsList(t, s.id, true) ? '' : ''}</div>${docsList(t, s.id, true)}</div>`;
+    const tomorrow = dayAdd(iso, 1), tl = legs.map((l, i) => [l, i]).find(([l, i]) => ldates[i] === tomorrow);
+    if (tl) html += `<div class="label"><span>Tomorrow</span></div>${legCard(tl[0], tl[1], fmtD(tomorrow))}`;
+  }
+  const tripDocs = docsList(t, 'trip', true); if (tripDocs) html += `<div class="label"><span>Trip documents</span></div><div class="card">${tripDocs}</div>`;
   return html;
 }
 
@@ -1467,6 +1652,7 @@ function stopSheet() {
   ${coverHtml}
   <div class="set"><span class="step"><button data-act="nights" data-d="-1" aria-label="Fewer nights">−</button><b>${s.nights}</b><button data-act="nights" data-d="1" aria-label="More nights">+</button></span><span class="lbl">nights · stop ${i + 1} of ${t.stops.length}</span>
     ${canAI() ? `<button class="pill sm" data-act="research" ${busy ? 'disabled' : ''}>${s.src === 'claude' ? 'Refresh with Claude' : s.hoods.length ? 'More with Claude' : 'Research with Claude'}</button>` : ''}</div>
+  ${fxRow(t, s)}
   ${busy ? `<div class="busy">Researching ${esc(s.city)} — neighbourhoods, hotels, things to do…</div>` : ''}${V.err[s.id] ? `<div class="err">${esc(V.err[s.id])}</div>` : ''}
   ${tabs}${dayChips}${map}${body}
   <div class="label"><span>Stop</span></div>
@@ -1490,6 +1676,9 @@ function planPane(t, s, d) {
   ${days}
   <div class="day"><div class="dh"><span><b>Not planned yet</b><small>Drag onto a day, or pick a day</small></span><span class="hrs">${un.length}</span></div>
   <div class="pday" data-sgroup="act" data-day="u">${un.map((x) => actRow(s, x, '', 0, 'u')).join('')}</div></div>
+  <div class="label"><span>Notes for ${esc(s.city)}</span></div>
+  <textarea class="inp" id="stopnote" rows="3" placeholder="Restaurant bookings, addresses, tips from friends…">${esc(s.note || '')}</textarea>
+  ${docsList(t, s.id, true) ? `<div class="label"><span>Documents</span></div><div class="card">${docsList(t, s.id, true)}</div>` : ''}
   <p class="note">Times assume a 9:30 start, 30 minutes between stops, and your arrival time on day 1. Drag ⠿ to reorder within a day or move between days.</p>`;
 }
 function actRow(s, x, time, n, day) {
@@ -1515,7 +1704,7 @@ function stayPane(t, s, d) {
       </div>
       <div class="money">
         ${st.pay === 'points' && isP ? `<div><b>${kpts(pts)}</b><span>pts / room / night</span></div><div><b>${kpts(c.pts)}</b><span>total points</span></div><div><b>${gbp(st.cash * s.nights * c.rooms)}</b><span>cash saved</span></div>`
-        : `<div><b>${gbp(st.cash)}</b><span>per room / night</span></div><div><b>${gbp(c.full)}</b><span>${s.nights}n × ${c.rooms} room${c.rooms === 1 ? '' : 's'}</span></div><div><b>${gbp(c.pp)}</b><span>each${c.share > t.trav ? ` · you pay ${gbp(c.cash)}` : ''}</span></div>`}
+        : `<div><b>${gbp(st.cash)}</b><span>per room / night${loc(st.cash, s) ? ' · ' + loc(st.cash, s) : ''}</span></div><div><b>${gbp(c.full)}</b><span>${s.nights}n × ${c.rooms} room${c.rooms === 1 ? '' : 's'}</span></div><div><b>${gbp(c.pp)}</b><span>each${c.share > t.trav ? ` · you pay ${gbp(c.cash)}` : ''}</span></div>`}
       </div>
       <div class="split" style="border-top:1px dashed var(--line2)"><button class="tog ${st.booked ? 'on' : ''}" data-act="staybooked"><i></i>Booked</button><input class="inp sm" id="stayref" value="${esc(st.ref || '')}" placeholder="Confirmation number" autocapitalize="characters" style="flex:1;min-width:140px"></div>${isP && st.pay !== 'points' && c.earn ? `<div class="hm" style="margin-top:2px">Earns about <b>${kpts(c.earn)}</b> ${esc(PROGS[st.prog].name)} points</div>` : ''}</div>`;
   }
@@ -1543,7 +1732,7 @@ function explorePane(t, s) {
   const kept = show.filter((x) => x.keep), gone = show.filter((x) => !x.keep);
   const byHood = {}; kept.forEach((x) => { const h = x.hood || 'Anywhere'; (byHood[h] = byHood[h] || []).push(x); });
   const order = [s.hood, ...s.hoods.map((h) => h.name), 'Anywhere', ...Object.keys(byHood)].filter((h, idx, a) => byHood[h] && a.indexOf(h) === idx);
-  const row = (x) => { const tp = x.custom ? null : todoPhoto(s, x); return `<div class="todo ${x.keep ? 'keep' : 'gone'} ${cap && (x.cost || 0) > cap ? 'pricey' : ''}"><button class="ck" data-keep="${x.id}" aria-label="${x.keep ? 'Remove' : 'Keep'}">${x.keep ? '✓' : ''}</button><div class="tw">${tp ? `<button class="tthumb" data-tph="${x.id}" aria-label="View photo"><img src="${esc(tp.thumb)}" alt="${esc(tp.alt || x.name)}" style="background:${esc(tp.color || '#ddd')}" loading="lazy"></button>` : ''}<div><div class="tn">${esc(x.name)}</div><div class="tm"><span class="type">${esc(TYPES[x.type] || x.type || 'Yours')}</span> ${x.hours ? hm(x.hours * 60) : ''}${x.cost ? ' · ' + gbp(x.cost) + 'pp' : ' · free'}${cap && (x.cost || 0) > cap ? ' · <span class="src bad">over £' + cap + '</span>' : ''}</div></div></div>${x.keep ? `<button class="tx" data-keep="${x.id}" aria-label="Remove">×</button>` : `<button class="pill sm" data-keep="${x.id}">Keep</button>`}</div>`; };
+  const row = (x) => { const tp = x.custom ? null : todoPhoto(s, x); return `<div class="todo ${x.keep ? 'keep' : 'gone'} ${cap && (x.cost || 0) > cap ? 'pricey' : ''}"><button class="ck" data-keep="${x.id}" aria-label="${x.keep ? 'Remove' : 'Keep'}">${x.keep ? '✓' : ''}</button><div class="tw">${tp ? `<button class="tthumb" data-tph="${x.id}" aria-label="View photo"><img src="${esc(tp.thumb)}" alt="${esc(tp.alt || x.name)}" style="background:${esc(tp.color || '#ddd')}" loading="lazy"></button>` : ''}<div><div class="tn">${esc(x.name)}</div><div class="tm"><span class="type">${esc(TYPES[x.type] || x.type || 'Yours')}</span> ${x.hours ? hm(x.hours * 60) : ''}${x.cost ? ' · ' + gbp(x.cost) + 'pp' + (loc(x.cost, s) ? ' (' + loc(x.cost, s) + ')' : '') : ' · free'}${cap && (x.cost || 0) > cap ? ' · <span class="src bad">over £' + cap + '</span>' : ''}</div></div></div>${x.keep ? `<button class="tx" data-keep="${x.id}" aria-label="Remove">×</button>` : `<button class="pill sm" data-keep="${x.id}">Keep</button>`}</div>`; };
   const hrs = kept.reduce((a, x) => a + hrsOf(x), 0), spend = kept.reduce((a, x) => a + (x.cost || 0), 0);
   return `<div class="label"><span>${kept.length} kept · ~${hm(hrs * 60)} · ${gbp(spend)}pp</span></div>
   <div class="chips"><button class="pill sm ${V.filter === 'all' ? 'on' : ''}" data-filter="all">All</button><button class="pill sm ${V.filter === 'free' ? 'on' : ''}" data-filter="free">Free</button>${cap ? `<button class="pill sm ${V.filter === 'cap' ? 'on' : ''}" data-filter="cap">≤ £${cap}</button>` : ''}${types.map((x) => `<button class="pill sm ${V.filter === x ? 'on' : ''}" data-filter="${x}">${esc(TYPES[x] || x)}</button>`).join('')}</div>
@@ -1577,6 +1766,7 @@ function legSheet() {
   <div class="label"><span>How you'll travel</span><span class="r">Prices for everyone</span></div>
   <div class="card">${opts}</div>
   ${av}
+  ${docsList(t, l.k, true) ? `<div class="label"><span>Documents</span></div><div class="card">${docsList(t, l.k, true)}</div>` : ''}
   <div class="label"><span>Your numbers</span></div>
   <form class="card pad" id="legform"><div class="grid2">
     <label class="field"><span>Time (h:mm)</span><input class="inp" id="lgt" value="${Math.floor(l.time / 60)}:${String(Math.round(l.time % 60)).padStart(2, '0')}"></label>
@@ -1724,6 +1914,10 @@ document.addEventListener('click', (e) => {
   if (d.stab) { V.stab = d.stab; V.day = null; return renderSheet(); }
   if (d.day) { V.day = d.day === 'all' ? null : +d.day; return renderSheet(); }
   if (d.uns != null && S_) { const p = (PH.cache[keyOf(cityQ(S_))] || [])[+d.uns]; if (p) { S_.cover = p; usePhoto(p); save(); renderSheet(); renderMain(); } return; }
+  if (d.addrem != null) { t.notes.reminders.push({ id: uid(), text: d.addrem, due: d.due || '', done: false }); save(); renderMain(); return toast('Reminder added'); }
+  if (d.remdone) { const r = t.notes.reminders.find((x) => x.id === d.remdone); if (r) { r.done = !r.done; save(); renderMain(); } return; }
+  if (d.delrem) { t.notes.reminders = t.notes.reminders.filter((x) => x.id !== d.delrem); save(); return renderMain(); }
+  if (d.deldoc) { const doc = t.notes.docs.find((x) => x.id === d.deldoc); t.notes.docs = t.notes.docs.filter((x) => x !== doc); if (assets && doc?.id && !String(doc.id).startsWith('w:')) assets.delete(doc.id).catch(() => {}); save(); renderMain(); return renderSheet(); }
   if (d.tph && S_) { const x = S_.todos.find((y) => y.id === d.tph), p = x && todoPhoto(S_, x, false); if (p) { V.light = { photo: p, title: x.name }; renderLight(); } return; }
   if (d.photo != null) { V.light = { sid: S_?.id, i: +d.photo }; return renderLight(); }
   if (d.hood && S_) { S_.hood = d.hood; save(); return renderSheet(); }
@@ -1777,6 +1971,11 @@ document.addEventListener('click', (e) => {
     case 'ics': return downloadICS(t);
     case 'copycal': navigator.clipboard?.writeText(calUrl(t)).then(() => toast('Calendar link copied'), () => toast(calUrl(t))); return;
     case 'mkcal': V.busy.share = true; renderSheet(); createShare(t).then(() => { V.busy.share = false; renderSheet(); }, (e) => { V.busy.share = false; V.err.share = e.message; renderSheet(); }); return;
+    case 'preview': V.preview = t.start; V.tab = 'today'; renderMain(); return scrollTo(0, 0);
+    case 'pvoff': V.preview = null; V.tab = inTrip(t) ? 'today' : 'plan'; return renderMain();
+    case 'entry': V.busy.entry = true; renderMain(); checkEntry(t).then(() => { V.busy.entry = false; save(); renderMain(); }, (e) => { V.busy.entry = false; toast(claudeErr(e, 'Could not check entry rules')); renderMain(); }); return;
+    case 'fxopen': V.fxOpen = V.fxOpen === S_?.id ? null : S_?.id; return renderSheet();
+    case 'fxclaude': V.busy.fx = true; renderSheet(); fxFromClaude(t).then(() => { V.busy.fx = false; renderSheet(); }, (e) => { V.busy.fx = false; toast(claudeErr(e, 'No rates came back')); renderSheet(); }); return;
     case 'climate': { const s = S_; if (!s) return; V.busy.wx = true; renderSheet(); climateFromClaude(s, t).then(() => { V.busy.wx = false; save(); renderSheet(); }, (e) => { V.busy.wx = false; toast(claudeErr(e, 'No weather came back')); renderSheet(); }); return; }
     case 'sharelink': V.err.share = ''; return openSheet({ k: 'share' });
     case 'mkshare': V.busy.share = true; renderSheet(); createShare(t).then(() => { V.busy.share = false; renderSheet(); toast('Link ready'); }, (e) => { V.busy.share = false; V.err.share = e.message; renderSheet(); }); return;
@@ -1807,6 +2006,9 @@ document.addEventListener('input', (e) => {
   if (el.id === 'tname') { T().name = el.value || 'Untitled trip'; save(); }
   if (el.dataset.w) { const [k, f] = el.dataset.w.split('.'); S.wallet[k][f] = num(el.value); save(); }
   if (el.dataset.tset && el.tagName === 'INPUT') { T()[el.dataset.tset] = num(el.value); save(); }
+  if (el.id === 'tripnote') { T().notes.text = el.value; save(); }
+  if (el.id === 'stopnote') { const s = T().stops.find((x) => x.id === V.sheet?.id); if (s) { s.note = el.value; save(); } }
+  if (el.id === 'fxl' || el.id === 'fxg') { const r = fxRate(el.dataset.ccy), v = num(el.value), other = $(el.id === 'fxl' ? '#fxg' : '#fxl'); if (r && other) other.value = el.value === '' ? '' : el.id === 'fxl' ? (v / r).toFixed(2) : (v * r >= 100 ? Math.round(v * r) : (v * r).toFixed(2)); }
   if (el.id === 'stayref') { const s = T().stops.find((x) => x.id === V.sheet?.id); if (s?.stay) { s.stay.ref = el.value.trim().toUpperCase(); save(); } }
   if (el.hasAttribute('data-legfee')) { const t = T(), l = legsOf(t).find((x) => x.k === V.sheet.id); const { a, b, i, k, ...rest } = l; t.legs[l.k] = { ...rest, fees: num(el.value) }; save(); }
 });
@@ -1814,6 +2016,10 @@ document.addEventListener('change', (e) => {
   const el = e.target, t = T();
   if (el.id === 'start') { t.start = el.value; save(); renderMain(); }
   if (el.id === 'photoin') addPhoto(el.files?.[0]);
+  if (el.id === 'docin') addDoc(el.files?.[0]);
+  if (el.id === 'doclink') V.docLink = el.value;
+  if (el.id === 'nat') { t.notes.nat = el.value; save(); renderMain(); }
+  if (el.id === 'pvdate' && el.value) { V.preview = el.value; renderMain(); }
   if (el.dataset.tset) { if (el.tagName === 'SELECT') { t[el.dataset.tset] = el.value; Object.keys(t.legs).forEach((k) => { if (t.legs[k].src === 'est') delete t.legs[k]; }); } save(); renderMain(); }
   if (el.dataset.w || el.id === 'tname') renderMain();
   if (el.hasAttribute('data-legfee')) renderSheet();
@@ -1833,6 +2039,7 @@ document.addEventListener('submit', (e) => {
   e.preventDefault(); const t = T();
   if (e.target.id === 'todoform') { const s = t.stops.find((x) => x.id === V.sheet?.id), v = $('#todoq').value.trim(); if (s && v) { const x = { id: uid(), name: v, hood: s.hood, type: '', hours: 1.5, cost: 0, keep: true, custom: true, lat: null, lng: null }; s.todos.unshift(x); if (s.days) s.days[0].push(x.id); save(); renderSheet(); } }
   if (e.target.id === 'legform') { const k = V.sheet.id, l = legsOf(t).find((x) => x.k === k); const [hh, mm] = $('#lgt').value.split(':'); const time = (+hh || 0) * 60 + (+mm || 0); const { a, b, i, k: kk, ...rest } = l; t.legs[k] = { ...rest, time: time || l.time, price: num($('#lgp').value), note: $('#lgn').value.trim(), num: $('#lgnum').value.trim().toUpperCase(), ref: $('#lgref').value.trim().toUpperCase(), dep: $('#lgdep').value, arr: $('#lgarr').value, arrDay: +$('#lgday').value || 0, src: rest.src === 'live' ? 'live' : 'custom' }; save(); renderSheet(); toast('Saved'); }
+  if (e.target.id === 'remform') { const v = $('#remq').value.trim(); if (v) { t.notes.reminders.push({ id: uid(), text: v, due: $('#remd').value || '', done: false }); save(); renderMain(); } return; }
   if (e.target.id === 'syncform') {
     const code = $('#syncq').value.trim().toUpperCase().replace(/\s+/g, '');
     if (!/^[A-Z0-9-]{16,64}$/.test(code)) { V.err.sync = 'That doesn\'t look like a sync code.'; return renderSheet(); }

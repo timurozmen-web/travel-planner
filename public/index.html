@@ -186,6 +186,16 @@ body.ro .grip, body.ro .addbox, body.ro .cta, body.ro form, body.ro .set, body.r
 body.ro .hb.rw, body.ro .cover .cb, body.ro [data-act="askdel"], body.ro .seg, body.ro .daychips + .cmap ~ .cta, body.ro .split input, body.ro .label .pill, body.ro .todo .pill { display: none !important; }
 body.ro .todo { grid-template-columns: minmax(0, 1fr) auto; }
 body.ro .prow { grid-template-columns: 42px minmax(0, 1fr); padding-left: 12px; }
+.wx { display: inline-flex; align-items: baseline; gap: 3px; font: 600 12.5px/1 var(--f); color: var(--ink); white-space: nowrap; }
+.wx i { font-style: normal; color: var(--ink3); font-weight: 500; }
+.wx.sm { font-size: 12px; }
+.wxbar { display: flex; gap: 12px; align-items: center; margin-top: 12px; padding: 11px 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); }
+.wxbar .wxbig { font: 650 20px/1 var(--f); white-space: nowrap; letter-spacing: -.02em; }
+.wxbar .wxbig i { font-style: normal; color: var(--ink3); font-weight: 500; font-size: 15px; }
+.wxbar b { display: block; font: 600 13px/1.2 var(--f); }
+.wxbar small { display: block; color: var(--ink2); font-size: 12px; margin-top: 2px; }
+.wxbar small a { color: var(--ink2); }
+.wxbar > span:first-child:not(.wxbig) { flex: 1; font-size: 13px; color: var(--ink2); }
 .src.ok { background: var(--ok-soft); color: var(--ok); }
 .todo .tw { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .tthumb { flex: none; width: 54px; height: 54px; border-radius: 9px; overflow: hidden; }
@@ -719,6 +729,85 @@ function dayStart(t, s, d) {
 }
 function timesFor(t, s, d) { let m = dayStart(t, s, d); const by = new Map(s.todos.map((x) => [x.id, x])); return (s.days[d] || []).map((id) => { const x = by.get(id); const st = m; m += hrsOf(x) * 60 + 30; return { x, st }; }).filter((r) => r.x); }
 
+/* ---------------- Weather (website: /api/weather via Open-Meteo; in Claude: typical weather from Claude) ---------------- */
+const WX = { cache: {}, pending: {}, off: false };
+try { WX.cache = JSON.parse(localStorage.getItem('journeys-planner-wx') || '{}') || {}; } catch {}
+const wxKey = (s, a, b) => `${(+s.lat).toFixed(2)},${(+s.lng).toFixed(2)},${a},${b}`;
+function wxFor(t, s, i) {
+  const d = stopDates(t)[i]; if (!d?.in || s.lat == null) return null;
+  const last = dayAdd(d.out, -1) < d.in ? d.in : dayAdd(d.out, -1), k = wxKey(s, d.in, last);
+  const hit = WX.cache[k]; if (hit && (hit.kind === 'typical' || Date.now() - hit.at < 3 * 3600e3)) return hit;
+  if (WX.off || WX.pending[k]) return hit || null;
+  WX.pending[k] = true;
+  fetch(`/api/weather?lat=${s.lat}&lng=${s.lng}&start=${d.in}&end=${last}`).then((r) => {
+    if (!(r.headers.get('content-type') || '').includes('json')) { WX.off = true; throw new Error('off'); }
+    return r.ok ? r.json() : null;
+  }).then((j) => {
+    if (!j?.days) return;
+    WX.cache[k] = { at: Date.now(), kind: j.days.some((x) => x.src === 'forecast') ? 'forecast' : 'typical', days: j.days };
+    try { localStorage.setItem('journeys-planner-wx', JSON.stringify(WX.cache)); } catch {}
+    photoRefresh();
+  }).catch(() => {}).finally(() => { WX.pending[k] = false; });
+  return hit || null;
+}
+const wxIcon = (x) => { if (!x) return ''; const c = x.code; if (c != null) return c >= 71 && c <= 86 && !(c >= 80 && c <= 82) ? '❄︎' : c >= 51 ? '☂︎' : c >= 2 ? '☁︎' : '☀︎'; return x.wet >= 0.5 ? '☂︎' : x.rain >= 0.3 ? '☁︎' : '☀︎'; };
+function wxDay(t, s, i, dayIdx) { const w = wxFor(t, s, i); return w?.days?.[dayIdx]?.hi != null ? w.days[dayIdx] : null; }
+function wxSum(t, s, i) {
+  const w = wxFor(t, s, i), ds = (w?.days || []).filter((x) => x.hi != null);
+  if (ds.length) { const avg = (f) => ds.reduce((p, x) => p + f(x), 0) / ds.length; return { hi: avg((x) => x.hi), lo: avg((x) => x.lo), wet: Math.round(ds.reduce((p, x) => p + (x.wet || 0), 0)), n: ds.length, kind: w.kind, rain: avg((x) => x.rain || 0) }; }
+  if (s.climate) return { hi: s.climate.hi, lo: s.climate.lo, wet: Math.round(s.climate.wetPct / 100 * s.nights), n: s.nights, kind: 'claude', rain: s.climate.wetPct >= 50 ? 1 : 0 };
+  return null;
+}
+const wxChip = (x, small) => x ? `<span class="wx${small ? ' sm' : ''}" title="${x.src === 'forecast' ? 'Forecast' : 'Typical for this date'}">${wxIcon(x)} ${Math.round(x.hi)}°<i>/${Math.round(x.lo)}°</i></span>` : '';
+async function climateFromClaude(s, t) {
+  const p = await askJSON(`Typical weather in ${s.city}, ${s.country} during ${monthOf(t, s)}: average daily high and low in °C and the chance of a wet day (≥1mm rain) in percent, plus one short practical note (max 12 words). Return ONLY JSON: {"hi":number,"lo":number,"wetPct":number,"note":string}`, 'quick');
+  if (!isFinite(+p?.hi)) throw new Error('No weather came back');
+  s.climate = { hi: +p.hi, lo: +p.lo, wetPct: +p.wetPct || 0, note: p.note || '', month: monthOf(t, s) };
+}
+
+/* ---------------- Calendar (.ics) ---------------- */
+const icsEsc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsFold = (line) => { const out = []; let cur = ''; for (const ch of line) { if (new TextEncoder().encode(cur + ch).length > 74) { out.push(cur); cur = ' ' + ch; } else cur += ch; } out.push(cur); return out.join('\r\n'); };
+const icsDate = (iso) => iso.replace(/-/g, '');
+const icsDT = (iso, min) => `${icsDate(iso)}T${String(Math.floor(min / 60) % 24).padStart(2, '0')}${String(min % 60).padStart(2, '0')}00`;
+function buildICS(t, withActs = true) {
+  const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z'), ev = [];
+  const add = (uid, f) => ev.push(['BEGIN:VEVENT', `UID:${uid}@journeys-planner`, `DTSTAMP:${now}`, ...f, 'END:VEVENT']);
+  const dates = stopDates(t), dts = legDates(t);
+  legsOf(t).forEach((l, i) => {
+    const date = dts[i]; if (!date) return;
+    const name = `${MODE_NAME[l.mode]} ${l.a.city} → ${l.b.city}${l.num ? ' · ' + l.num : ''}`;
+    const desc = [l.booked ? 'Booked' : 'Not booked yet', l.ref ? 'Ref ' + l.ref : '', l.note, l.pay === 'avios' ? 'Paying with Avios' : ''].filter(Boolean).join('\n');
+    const dep = toMin(l.dep), arr = toMin(l.arr);
+    if (dep != null) {
+      const end = arr != null ? icsDT(dayAdd(date, l.arrDay || 0), arr) : icsDT(dayAdd(date, Math.floor((dep + l.time) / 1440)), (dep + l.time) % 1440);
+      add(`${t.id}-leg-${l.k.replace(/[^a-z0-9]/gi, '')}`, [`DTSTART:${icsDT(date, dep)}`, `DTEND:${end}`, `SUMMARY:${icsEsc(name)}`, `DESCRIPTION:${icsEsc(desc + '\nTimes are local')}`, `LOCATION:${icsEsc(l.a.city)}`]);
+    } else add(`${t.id}-leg-${l.k.replace(/[^a-z0-9]/gi, '')}`, [`DTSTART;VALUE=DATE:${icsDate(date)}`, `DTEND;VALUE=DATE:${icsDate(dayAdd(date, 1))}`, `SUMMARY:${icsEsc(name)}`, `DESCRIPTION:${icsEsc(desc)}`, 'TRANSP:TRANSPARENT']);
+  });
+  t.stops.forEach((s, i) => {
+    const d = dates[i]; if (!d?.in) return;
+    const st = s.stay, title = `${s.city}${st ? ' · ' + st.name : ''}`;
+    add(`${t.id}-stay-${s.id}`, [`DTSTART;VALUE=DATE:${icsDate(d.in)}`, `DTEND;VALUE=DATE:${icsDate(d.out)}`, `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc([st ? (st.booked ? 'Booked' : 'Not booked yet') : '', st?.ref ? 'Confirmation ' + st.ref : '', s.hood ? 'Based in ' + s.hood : ''].filter(Boolean).join('\n'))}`, `LOCATION:${icsEsc((st?.name ? st.name + ', ' : '') + s.city)}`, 'TRANSP:TRANSPARENT']);
+    if (withActs) { syncDays(t, s); s.days.forEach((_, j) => timesFor(t, s, j).forEach((r) => {
+      const day = dayAdd(d.in, j), end = r.st + hrsOf(r.x) * 60;
+      add(`${t.id}-act-${r.x.id}`, [`DTSTART:${icsDT(day, r.st)}`, `DTEND:${icsDT(dayAdd(day, Math.floor(end / 1440)), Math.round(end % 1440))}`, `SUMMARY:${icsEsc(r.x.name)}`, `LOCATION:${icsEsc([r.x.hood, s.city].filter(Boolean).join(', '))}`, ...(r.x.lat != null ? [`GEO:${r.x.lat};${r.x.lng}`] : []), `DESCRIPTION:${icsEsc([r.x.cost ? '£' + r.x.cost + ' per person' : 'Free', 'Planned in Journeys Planner'].join('\n'))}`]);
+    })); }
+  });
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Journeys Planner//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icsEsc(t.name)}`, ...ev.flat(), 'END:VCALENDAR'].map(icsFold).join('\r\n') + '\r\n';
+}
+async function downloadICS(t) {
+  const name = (t.name || 'trip').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') + '.ics', data = buildICS(t, t.calActs !== false);
+  if (window.claude?.use) {
+    const dl = await window.claude.use('downloads').catch(() => null);
+    if (!dl) return toast('Downloads aren\'t available here');
+    try { await dl.save({ filename: name, data }); } catch { toast('Download cancelled'); }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([data], { type: 'text/calendar' }));
+  const aEl = Object.assign(document.createElement('a'), { href: url, download: name }); document.body.append(aEl); aEl.click(); aEl.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 /* ---------------- Persistence ----------------
    Inside Claude: the artifact's db (per person). On the website: localStorage, plus
    optional cloud sync through /api/sync under a private sync code. */
@@ -806,14 +895,15 @@ function shareDoc(t) {
   return JSON.stringify({ trip: c, packs, sharedBy: 'Journeys Planner' });
 }
 const shareUrl = (t) => t.share ? `${location.origin}/?trip=${t.share.id}` : '';
+const calUrl = (t) => t.share ? `webcal://${location.host}/api/cal/${t.share.id}.ics` : '';
 async function createShare(t) {
-  const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: shareDoc(t) }) });
+  const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: shareDoc(t), ics: buildICS(t, t.calActs !== false) }) });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Could not create the link');
   t.share = { id: j.id, token: j.token }; save();
 }
 function updateShareSoon(t) {
   if (!t?.share || !webSync) return; clearTimeout(shareT);
-  shareT = setTimeout(() => fetch('/api/share?id=' + t.share.id, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-share-token': t.share.token }, body: JSON.stringify({ doc: shareDoc(t) }) }).catch(() => {}), 1500);
+  shareT = setTimeout(() => fetch('/api/share?id=' + t.share.id, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-share-token': t.share.token }, body: JSON.stringify({ doc: shareDoc(t), ics: buildICS(t, t.calActs !== false) }) }).catch(() => {}), 1500);
 }
 async function stopShare(t) {
   if (!t.share) return;
@@ -946,7 +1036,7 @@ function stopCard(t, s, i, d) {
   return `<div class="stop" data-sort="stop" data-id="${s.id}">
     ${thumb(s, i + 1)}
     <div class="sbody" data-open="${s.id}"><div class="sname">${esc(s.city)}<small>${esc(s.country)}</small></div>
-      <div class="smeta">${d?.in ? `${fmtD(d.in)} → ${fmtD(d.out)} · ` : ''}<b>${s.nights}</b> night${s.nights === 1 ? '' : 's'}${s.hood ? ' · ' + esc(s.hood) : ''}</div>
+      <div class="smeta">${d?.in ? `${fmtD(d.in)} → ${fmtD(d.out)} · ` : ''}<b>${s.nights}</b> night${s.nights === 1 ? '' : 's'}${s.hood ? ' · ' + esc(s.hood) : ''}${(() => { const w = wxSum(t, s, i); return w ? ' · ' + wxChip({ hi: w.hi, lo: w.lo, wet: w.wet / Math.max(1, w.n), rain: w.rain }, true) : ''; })()}</div>
       <div class="smeta">${st ? `${logo(st.prog)} ${esc(st.name)} · ${st.pay === 'points' && PROGS[st.prog] ? kpts(c.pts) + ' pts' : gbp(c.cash)}${over ? ' <span class="src bad">over cap</span>' : ''}${st.booked ? ' <span class="src ok">✓</span>' : ''}` : 'No stay chosen'}${kept ? ` · ${kept} to do` : ''}</div></div>
     <button class="grip" data-grip aria-label="Drag to reorder">${GRIP}</button>
   </div>`;
@@ -965,13 +1055,13 @@ function legRow(t, l) {
 
 /* ---------------- Plan view (whole trip) ---------------- */
 function planView(t) {
-  const legs = legsOf(t), dates = stopDates(t); let dn = 0, html = `<div class="label"><span>Day by day</span><span class="r">Tap a day to edit it</span></div>`;
+  const legs = legsOf(t), dates = stopDates(t); let dn = 0, html = `<div class="label"><span>Day by day</span><button class="pill sm" data-act="cal">＋ Add to calendar</button></div>`;
   t.stops.forEach((s, i) => {
     syncDays(t, s);
     const inLeg = legs.find((l) => l.b.id === s.id);
     s.days.forEach((ids, d) => {
       dn++; const date = dayAdd(dates[i].in, d), rows = timesFor(t, s, d), hrs = rows.reduce((a, r) => a + hrsOf(r.x), 0);
-      html += `<div class="day"><button class="dh" data-openday="${s.id}" data-d="${d}"><span><b>Day ${dn} · ${esc(s.city)}</b><small>${fmtD(date)}${s.hood ? ' · based in ' + esc(s.hood) : ''}</small></span><span class="hrs">${rows.length ? hm(hrs * 60) : 'Free day'} ›</span></button>
+      html += `<div class="day"><button class="dh" data-openday="${s.id}" data-d="${d}"><span><b>Day ${dn} · ${esc(s.city)}</b><small>${fmtD(date)}${s.hood ? ' · based in ' + esc(s.hood) : ''}</small></span><span class="hrs">${wxChip(wxDay(t, s, i, d), true)} ${rows.length ? hm(hrs * 60) : 'Free day'} ›</span></button>
         ${d === 0 && inLeg ? `<div class="pfix"><span class="ic ${inLeg.mode}">${ICON[inLeg.mode]}</span><span><b>${MODE_NAME[inLeg.mode]} from ${esc(inLeg.a.city)}</b>${inLeg.num ? ' ' + esc(inLeg.num) : ''} · ${inLeg.dep && inLeg.arr ? esc(inLeg.dep) + ' → ' + esc(inLeg.arr) + (inLeg.arrDay ? ' +' + inLeg.arrDay : '') : hm(inLeg.time)}${inLeg.ref ? ' · ref ' + esc(inLeg.ref) : ''}${inLeg.booked ? ' <span class="src ok">✓ Booked</span>' : ''}</span></div>` : ''}
         ${rows.map((r, j) => `<div class="pfix" style="cursor:pointer" data-openday="${s.id}" data-d="${d}"><span class="tm" style="font:600 12px var(--f);width:38px">${clock(r.st)}</span>${(() => { const tp = r.x.custom ? null : todoPhoto(s, r.x, false); return tp ? `<img class="pthumb" src="${esc(tp.thumb)}" alt="" style="background:${esc(tp.color || '#ddd')}" loading="lazy">` : ''; })()}<span><span class="no2" style="background:${TYPE_COL[r.x.type] || 'var(--ink)'}">${j + 1}</span><b>${esc(r.x.name)}</b> · ${hm(hrsOf(r.x) * 60)}${r.x.cost ? ' · ' + gbp(r.x.cost) + 'pp' : ''}</span></div>`).join('')}
         ${s.stay ? `<div class="pfix"><span class="ic">${ICON.bed}</span><span>Night at <b>${esc(s.stay.name)}</b>${s.stay.ref ? ' · ref ' + esc(s.stay.ref) : ''}${s.stay.booked ? ' <span class="src ok">✓ Booked</span>' : ''}</span></div>` : ''}</div>`;
@@ -1345,7 +1435,7 @@ function closeSheet() { V.sheet = null; V.day = null; renderSheet(); renderMain(
 function renderSheet() {
   const el = $('#sheet'), old = $('.sheet', el), y = old ? old.scrollTop : 0, key = V.sheet ? V.sheet.k + ':' + (V.sheet.id || '') : '';
   const k = V.sheet?.k;
-  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : k === 'share' ? shareSheet() : '';
+  const html = k === 'stop' ? stopSheet() : k === 'leg' ? legSheet() : k === 'trips' ? tripsSheet() : k === 'wallet' ? walletSheet() : k === 'home' ? homeSheet() : k === 'new' ? newSheet() : k === 'sync' ? syncSheet() : k === 'share' ? shareSheet() : k === 'cal' ? calSheet() : '';
   el.innerHTML = html ? `<div class="sheet"><div class="wrap">${html}</div></div>` : '';
   if (html && el.dataset.key === key) $('.sheet', el).scrollTop = y;
   el.dataset.key = key; document.body.style.overflow = html ? 'hidden' : '';
@@ -1382,15 +1472,21 @@ function stopSheet() {
   <div class="label"><span>Stop</span></div>
   <div class="card">${V.confirm === 'del' ? `<div class="confirm"><span>Remove ${esc(s.city)} from this trip?</span><button class="pill sm go" data-act="delstop">Remove</button><button class="pill sm" data-act="noconfirm">Keep</button></div>` : `<button class="trow" data-act="askdel"><span><b style="color:var(--bad)">Remove ${esc(s.city)}</b><small>Takes it out of the route</small></span></button>`}</div>`;
 }
+function wxStrip(t, s) {
+  const i = t.stops.indexOf(s), w = wxSum(t, s, i);
+  if (!w) return WX.off && canAI() ? `<div class="wxbar"><span>No weather yet for ${esc(s.city)}.</span><button class="pill sm" data-act="climate" ${V.busy.wx ? 'disabled' : ''}>${V.busy.wx ? 'Asking Claude…' : 'Typical weather'}</button></div>` : '';
+  const label = w.kind === 'forecast' ? 'Forecast' : w.kind === 'claude' ? `Typical for ${esc(s.climate.month)} · from Claude` : 'Typical for these dates';
+  return `<div class="wxbar"><span class="wxbig">${wxIcon({ wet: w.wet / Math.max(1, w.n), rain: w.rain })} ${Math.round(w.hi)}°<i>/${Math.round(w.lo)}°</i></span><span><b>${label}</b><small>${w.wet ? `Rain likely on ~${w.wet} of ${w.n} day${w.n === 1 ? '' : 's'}` : 'Mostly dry'}${w.kind === 'claude' && s.climate.note ? ' · ' + esc(s.climate.note) : ''}${w.kind !== 'claude' ? ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>' : ''}</small></span></div>`;
+}
 function planPane(t, s, d) {
-  const by = new Map(s.todos.map((x) => [x.id, x])), un = unplanned(s);
+  const by = new Map(s.todos.map((x) => [x.id, x])), un = unplanned(s), si = t.stops.indexOf(s);
   const days = s.days.map((ids, j) => {
     if (V.day != null && V.day !== j) return '';
     const rows = timesFor(t, s, j), hrs = rows.reduce((a, r) => a + hrsOf(r.x), 0), cap = dayCap(t, s, j);
-    return `<div class="day"><div class="dh ${V.day === j ? 'on' : ''}"><span><b>Day ${j + 1} · ${fmtD(dayAdd(d.in, j))}</b><small>${j < arrival(t, s).day ? 'In transit' : j === arrival(t, s).day ? 'Arrival day' + (arrival(t, s).min != null ? ' · free from ' + clock(arrival(t, s).min) : '') : rows.length ? [...new Set(rows.map((r) => r.x.hood).filter(Boolean))].join(' · ') : 'Nothing planned yet'}</small></span><span class="hrs ${hrs > cap ? 'over' : ''}">${hm(hrs * 60)} / ${hm(cap * 60)}</span></div>
+    return `<div class="day"><div class="dh ${V.day === j ? 'on' : ''}"><span><b>Day ${j + 1} · ${fmtD(dayAdd(d.in, j))}</b><small>${j < arrival(t, s).day ? 'In transit' : j === arrival(t, s).day ? 'Arrival day' + (arrival(t, s).min != null ? ' · free from ' + clock(arrival(t, s).min) : '') : rows.length ? [...new Set(rows.map((r) => r.x.hood).filter(Boolean))].join(' · ') : 'Nothing planned yet'}</small></span><span class="hrs ${hrs > cap ? 'over' : ''}">${wxChip(wxDay(t, s, si, j), true)} ${hm(hrs * 60)} / ${hm(cap * 60)}</span></div>
       <div class="pday" data-sgroup="act" data-day="${j}">${rows.map((r, n) => actRow(s, r.x, clock(r.st), n + 1, j)).join('')}</div></div>`;
   }).join('');
-  return `<div class="cta"><button class="pill" data-act="autoplan">Auto-plan by neighbourhood</button><button class="pill ghost" data-stab="explore">＋ Add things to do</button></div>
+  return `${wxStrip(t, s)}<div class="cta"><button class="pill" data-act="autoplan">Auto-plan by neighbourhood</button><button class="pill ghost" data-stab="explore">＋ Add things to do</button></div>
   ${days}
   <div class="day"><div class="dh"><span><b>Not planned yet</b><small>Drag onto a day, or pick a day</small></span><span class="hrs">${un.length}</span></div>
   <div class="pday" data-sgroup="act" data-day="u">${un.map((x) => actRow(s, x, '', 0, 'u')).join('')}</div></div>
@@ -1538,12 +1634,27 @@ function tripsSheet() {
   <label class="field" style="margin-top:12px"><span>This trip's name</span><input class="inp" id="tname" value="${esc(t.name)}"></label>
   <div class="label"><span>All trips</span></div>
   <div class="card">${S.trips.map((x) => { const tt = totals(x); return `<button class="trow ${x.id === t.id ? 'on' : ''}" data-trip="${x.id}"><span><b>${esc(x.name)}</b><small>${x.stops.map((s) => esc(s.city)).join(' → ') || 'No stops yet'}${x.start ? ' · ' + fmtD(x.start) : ''}</small></span><span style="text-align:right"><b>${gbp(tt.cash)}</b><small>${tt.nights} nights${x.budget ? ' · ' + (tt.cash > x.budget ? 'over' : 'in') + ' budget' : ''}</small></span></button>`; }).join('')}</div>
+  <div class="label"><span>Calendar</span></div><div class="card"><button class="trow" data-act="cal"><span><b>Add to calendar</b><small>Flights, stays and day plans${webSync ? ', or a subscription that stays up to date' : ' as a calendar file'}</small></span><span>›</span></button></div>
   ${webSync ? `<div class="label"><span>Share</span></div><div class="card"><button class="trow" data-act="sharelink"><span><b>${t.share ? 'Shared · view-only link' : 'Share a view-only link'}</b><small>${t.share ? 'Anyone with the link sees this trip, updated as you edit' : 'For whoever you\'re travelling with — they can look, not change'}</small></span><span>›</span></button></div>` : ''}
   <div class="label"><span>Move trips between versions</span></div>
   <div class="card pad"><p class="note" style="margin:0 0 10px">Copy your trips here, then paste them into the planner in Claude or on the website.</p>
     <div class="cta" style="margin-top:0"><button class="pill" data-act="export">Copy all trips</button></div>
     <form id="importform" style="margin-top:12px;display:grid;gap:8px"><textarea class="inp" id="importq" rows="3" placeholder="Paste trips copied from the other version" style="font-size:13px;resize:vertical"></textarea><div><button class="pill go">Import</button></div></form></div>
   <div class="cta"><button class="pill" data-act="dup">Duplicate this trip</button>${S.trips.length > 1 ? (V.confirm === 'deltrip' ? `<button class="pill go" data-act="deltrip">Delete “${esc(t.name)}”</button><button class="pill" data-act="noconfirm">Cancel</button>` : `<button class="pill" data-act="askdeltrip">Delete this trip</button>`) : ''}</div>`;
+}
+function calSheet() {
+  const t = T(), url = calUrl(t);
+  return `${head()}<div class="stitle">Add to calendar</div><div class="ssub">Flights and trains with times and references, each hotel stay${t.calActs !== false ? ', and every planned activity' : ''}.</div>
+  <div class="card pad" style="margin-top:14px;display:grid;gap:12px">
+    <button class="tog ${t.calActs !== false ? 'on' : ''}" data-act="calacts"><i></i>Include things to do</button>
+    <div><button class="pill go" data-act="ics">Download calendar file</button></div>
+    <p class="note" style="margin:0">On iPhone, open the file and tap <b>Add All</b>. It's a one-off copy, so download again after big changes.</p>
+  </div>
+  ${webSync ? `<div class="label"><span>Stay up to date</span></div><div class="card pad">
+    ${url ? `<p style="margin:0 0 10px">Subscribe once and your calendar follows the trip as you edit it.</p><div class="cta" style="margin-top:0"><a class="pill go" href="${esc(url)}">Subscribe in Calendar</a><button class="pill" data-act="copycal">Copy link</button></div>
+      <p class="note">Calendar apps refresh subscriptions every so often, not instantly. This uses your trip's view-only link, so anyone with it can see the trip.</p>`
+    : `<p style="margin:0 0 10px">A subscription keeps your calendar in step with the trip. It needs a view-only link, which I'll create.</p><button class="pill go" data-act="mkcal" ${V.busy.share ? 'disabled' : ''}>${V.busy.share ? 'Creating…' : 'Create subscription'}</button>`}</div>` : ''}
+  ${V.err.share ? `<div class="err">${esc(V.err.share)}</div>` : ''}`;
 }
 function shareSheet() {
   const t = T(), url = shareUrl(t);
@@ -1661,6 +1772,12 @@ document.addEventListener('click', (e) => {
     case 'deltrip': S.trips = S.trips.filter((x) => x.id !== t.id); S.cur = S.trips[0]?.id; save(); M.sig = ''; return closeSheet();
     case 'legbooked': { const l = legsOf(t).find((x) => x.k === V.sheet.id); if (l) { const { a, b: bb, i, k, ...rest } = l; t.legs[l.k] = { ...rest, booked: !l.booked }; save(); renderSheet(); } return; }
     case 'staybooked': if (S_?.stay) { S_.stay.booked = !S_.stay.booked; save(); renderSheet(); } return;
+    case 'cal': V.err.share = ''; return openSheet({ k: 'cal' });
+    case 'calacts': t.calActs = t.calActs === false; save(); return renderSheet();
+    case 'ics': return downloadICS(t);
+    case 'copycal': navigator.clipboard?.writeText(calUrl(t)).then(() => toast('Calendar link copied'), () => toast(calUrl(t))); return;
+    case 'mkcal': V.busy.share = true; renderSheet(); createShare(t).then(() => { V.busy.share = false; renderSheet(); }, (e) => { V.busy.share = false; V.err.share = e.message; renderSheet(); }); return;
+    case 'climate': { const s = S_; if (!s) return; V.busy.wx = true; renderSheet(); climateFromClaude(s, t).then(() => { V.busy.wx = false; save(); renderSheet(); }, (e) => { V.busy.wx = false; toast(claudeErr(e, 'No weather came back')); renderSheet(); }); return; }
     case 'sharelink': V.err.share = ''; return openSheet({ k: 'share' });
     case 'mkshare': V.busy.share = true; renderSheet(); createShare(t).then(() => { V.busy.share = false; renderSheet(); toast('Link ready'); }, (e) => { V.busy.share = false; V.err.share = e.message; renderSheet(); }); return;
     case 'copylink': navigator.clipboard?.writeText(shareUrl(t)).then(() => toast('Link copied'), () => $('#shareurl')?.select()); return;

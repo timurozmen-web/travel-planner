@@ -133,6 +133,7 @@ a.pill { text-decoration: none; }
 .set label, .lbl { display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px/1 var(--f); color: var(--ink2); }
 .inp { font-size: 16px; padding: 9px 11px; border: 1px solid var(--line2); border-radius: var(--r-sm); background: var(--card); min-width: 0; width: 100%; }
 .inp.sm { font-size: 14px; padding: 7px 9px; width: auto; }
+select.inp.sm { padding-right: 26px; background-position: right 9px center; }
 select.inp { appearance: none; background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23566072' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center; padding-right: 28px; }
 .step { display: inline-flex; align-items: center; border: 1px solid var(--line2); border-radius: 999px; background: var(--card); overflow: hidden; }
 .step button { width: 32px; height: 32px; font: 600 16px/1 var(--f); color: var(--ink); text-align: center; }
@@ -245,6 +246,18 @@ textarea.inp { resize: vertical; line-height: 1.45; font-size: 15px; }
 .ck2 { width: 14px; height: 14px; border: 1.5px solid var(--line2); border-radius: 4px; flex: none; }
 button.lnk { background: none; border: 0; padding: 0; color: var(--brand); font-weight: 600; font-size: 12.5px; cursor: pointer; }
 .label .pill, .label label.pill { text-transform: none; letter-spacing: 0; }
+.people { display: flex; flex-wrap: wrap; gap: 8px; }
+.people .inp { width: 130px; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) auto 28px; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.srow:last-child { border-bottom: 0; }
+.srow b { display: block; font: 600 14px/1.25 var(--f); }
+.srow small { display: block; color: var(--ink2); font-size: 12px; margin-top: 2px; }
+.srow select { max-width: 140px; }
+.srow .tx { color: var(--ink3); font-size: 18px; width: 28px; height: 28px; border-radius: 8px; text-align: center; }
+.srow.aw { grid-template-columns: minmax(0, 1fr) auto; }
+.srow.aw > span:first-child { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.srow .okt { color: var(--ok); font-weight: 600; }
+.av { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #1B365D; color: #fff; font: 700 9px/1 var(--f); flex: none; }
 .src.ok { background: var(--ok-soft); color: var(--ok); }
 .todo .tw { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .tthumb { flex: none; width: 54px; height: 54px; border-radius: 9px; overflow: hidden; }
@@ -619,7 +632,7 @@ const packFor = (name) => { const k = keyOf(name); return S.packs[k] || seedPack
 const LS = 'journeys-planner-v1';
 const blankWallet = () => ({ ...Object.fromEntries(Object.entries(PROGS).map(([k, p]) => [k, { bal: 0, bonus: 0, ppp: p.ppp }])), avios: { bal: 0, bonus: 0, ppp: 1 } });
 let S = { trips: [], cur: null, wallet: blankWallet(), packs: {} };
-const V = { tab: 'route', sheet: null, stab: 'plan', day: null, live: {}, busy: {}, err: {}, filter: 'all', showGone: false, confirm: null, ideas: {}, capOnly: true, draft: null, light: null, play: null };
+const V = { rooms: {}, tab: 'route', sheet: null, stab: 'plan', day: null, live: {}, busy: {}, err: {}, filter: 'all', showGone: false, confirm: null, ideas: {}, capOnly: true, draft: null, light: null, play: null };
 const T = () => S.trips.find((t) => t.id === S.cur) || S.trips[0];
 
 function migrate() {
@@ -629,6 +642,10 @@ function migrate() {
     t.legs ??= {};
     t.notes ??= { text: '', reminders: [], docs: [], entry: null, nat: 'United Kingdom' };
     t.notes.reminders ??= []; t.notes.docs ??= [];
+    t.expenses ??= [];
+    t.people ??= [];
+    while (t.people.length < t.trav) t.people.push({ id: uid(), name: t.people.length ? 'Traveller ' + (t.people.length + 1) : 'You' });
+    if (t.people.length > t.trav) t.people.length = t.trav;
     t.stops.forEach((s) => {
       s.photos ??= [];
       const p = packFor(s.city);
@@ -872,7 +889,7 @@ function buildICS(t, withActs = true, withReminders = true) {
   t.stops.forEach((s, i) => {
     const d = dates[i]; if (!d?.in) return;
     const st = s.stay, title = `${s.city}${st ? ' · ' + st.name : ''}`;
-    add(`${t.id}-stay-${s.id}`, [`DTSTART;VALUE=DATE:${icsDate(d.in)}`, `DTEND;VALUE=DATE:${icsDate(d.out)}`, `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc([st ? (st.booked ? 'Booked' : 'Not booked yet') : '', st?.ref ? 'Confirmation ' + st.ref : '', s.hood ? 'Based in ' + s.hood : ''].filter(Boolean).join('\n'))}`, `LOCATION:${icsEsc((st?.name ? st.name + ', ' : '') + s.city)}`, 'TRANSP:TRANSPARENT']);
+    add(`${t.id}-stay-${s.id}`, [`DTSTART;VALUE=DATE:${icsDate(d.in)}`, `DTEND;VALUE=DATE:${icsDate(d.out)}`, `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc([st ? (st.booked ? 'Booked' : 'Not booked yet') : '', st?.ref ? 'Confirmation ' + st.ref : '', s.hood ? 'Based in ' + s.hood : ''].filter(Boolean).join('\n'))}`, `LOCATION:${icsEsc(st?.address || (st?.name ? st.name + ', ' : '') + s.city)}`, 'TRANSP:TRANSPARENT']);
     if (withActs) { syncDays(t, s); s.days.forEach((_, j) => timesFor(t, s, j).forEach((r) => {
       const day = dayAdd(d.in, j), end = r.st + hrsOf(r.x) * 60;
       add(`${t.id}-act-${r.x.id}`, [`DTSTART:${icsDT(day, r.st)}`, `DTEND:${icsDT(dayAdd(day, Math.floor(end / 1440)), Math.round(end % 1440))}`, `SUMMARY:${icsEsc(r.x.name)}`, `LOCATION:${icsEsc([r.x.hood, s.city].filter(Boolean).join(', '))}`, ...(r.x.lat != null ? [`GEO:${r.x.lat};${r.x.lng}`] : []), `DESCRIPTION:${icsEsc([r.x.cost ? '£' + r.x.cost + ' per person' : 'Free', 'Planned in Journeys Planner'].join('\n'))}`]);
@@ -1250,12 +1267,68 @@ function todayView(t) {
     const nextIdx = rows.findIndex((r) => r.st + hrsOf(r.x) * 60 > nowMin);
     html += `<div class="label"><span>Today's plan</span><button class="pill sm ghost" data-openday="${s.id}" data-d="${d}">Edit ›</button></div><div class="card">${rows.map((r, j) => { const endM = r.st + hrsOf(r.x) * 60, state = endM <= nowMin ? 'past' : j === nextIdx ? (r.st <= nowMin ? 'now' : 'next') : '';
       return `<div class="trow2 ${state}"><span class="tm">${clock(r.st)}</span><span class="tb"><b>${esc(r.x.name)}</b><small>${state === 'now' ? 'Now · ' : state === 'next' ? (real ? 'Next · ' + until(r.st - nowMin) + ' · ' : 'Next · ') : ''}${esc(r.x.hood || '')}${r.x.cost ? ' · ' + gbp(r.x.cost) + 'pp' + (loc(r.x.cost, s) ? ' (' + loc(r.x.cost, s) + ')' : '') : ''}</small></span><a class="lnk" href="${esc(mapsLink(r.x.name + ', ' + s.city))}" target="_blank" rel="noopener">Map</a></div>`; }).join('') || `<div class="empty">Nothing planned${d === 0 ? ' — arrival day' : ''}. <button class="lnk" data-openday="${s.id}" data-d="${d}">Plan this day ›</button></div>`}</div>`;
-    if (s.stay) html += `<div class="label"><span>Tonight</span></div><div class="card pad tonight"><b>${esc(s.stay.name)}</b><small>${esc(s.stay.hood || s.hood || '')}${s.stay.ref ? ' · Confirmation <b>' + esc(s.stay.ref) + '</b>' : ''}${s.stay.booked ? ' · ✓ booked' : ' · not booked yet'}</small><div class="cta" style="margin-top:8px"><a class="pill sm" href="${esc(mapsLink(s.stay.name + ', ' + s.city))}" target="_blank" rel="noopener">Directions ↗</a>${docsList(t, s.id, true) ? '' : ''}</div>${docsList(t, s.id, true)}</div>`;
+    if (s.stay) html += `<div class="label"><span>Tonight</span></div><div class="card pad tonight"><b>${esc(s.stay.name)}</b><small>${esc(s.stay.hood || s.hood || '')}${s.stay.ref ? ' · Confirmation <b>' + esc(s.stay.ref) + '</b>' : ''}${s.stay.booked ? ' · ✓ booked' : ' · not booked yet'}</small><div class="cta" style="margin-top:8px">${s.stay.checkin ? `<span class="lbl">Check-in ${esc(s.stay.checkin)}</span>` : ''}<a class="pill sm" href="${esc(mapsLink(s.stay.address || s.stay.name + ', ' + s.city))}" target="_blank" rel="noopener">Directions ↗</a>${docsList(t, s.id, true) ? '' : ''}</div>${docsList(t, s.id, true)}</div>`;
     const tomorrow = dayAdd(iso, 1), tl = legs.map((l, i) => [l, i]).find(([l, i]) => ldates[i] === tomorrow);
     if (tl) html += `<div class="label"><span>Tomorrow</span></div>${legCard(tl[0], tl[1], fmtD(tomorrow))}`;
   }
   const tripDocs = docsList(t, 'trip', true); if (tripDocs) html += `<div class="label"><span>Trip documents</span></div><div class="card">${tripDocs}</div>`;
   return html;
+}
+
+/* ---------------- Splitting costs ---------------- */
+function splitItems(t) {
+  const items = [];
+  legsOf(t).forEach((l) => { const c = legCost(t, l).cash; if (c > 0) items.push({ kind: 'leg', key: l.k, label: `${MODE_NAME[l.mode]} ${l.a.city} → ${l.b.city}`, gbp: c, paidBy: t.legs[l.k]?.paidBy || '', split: t.people.map((p) => p.id) }); });
+  t.stops.forEach((s) => { const c = stayCost(t, s).cash; if (s.stay && c > 0) items.push({ kind: 'stay', key: s.id, label: `${s.stay.name}, ${s.city}`, gbp: c, paidBy: s.stay.paidBy || '', split: t.people.map((p) => p.id) }); });
+  t.expenses.forEach((x) => items.push({ kind: 'exp', key: x.id, label: x.label, gbp: x.gbp, paidBy: x.paidBy, split: x.split?.length ? x.split : t.people.map((p) => p.id), amt: x.amt, ccy: x.ccy }));
+  return items;
+}
+function settle(t) {
+  const bal = Object.fromEntries(t.people.map((p) => [p.id, 0]));
+  let unpaid = 0;
+  splitItems(t).forEach((it) => {
+    if (!it.paidBy || !(it.paidBy in bal)) { unpaid += it.gbp; return; }
+    const who = it.split.filter((id) => id in bal); if (!who.length) return;
+    bal[it.paidBy] += it.gbp; who.forEach((id) => { bal[id] -= it.gbp / who.length; });
+  });
+  const cred = Object.entries(bal).filter(([, v]) => v > 0.5).map(([id, v]) => ({ id, v })).sort((x, y) => y.v - x.v);
+  const debt = Object.entries(bal).filter(([, v]) => v < -0.5).map(([id, v]) => ({ id, v: -v })).sort((x, y) => y.v - x.v);
+  const moves = [];
+  for (let i = 0, j = 0; i < debt.length && j < cred.length;) { const m = Math.min(debt[i].v, cred[j].v); moves.push({ from: debt[i].id, to: cred[j].id, gbp: m }); debt[i].v -= m; cred[j].v -= m; if (debt[i].v < 0.5) i++; if (cred[j].v < 0.5) j++; }
+  return { bal, moves, unpaid };
+}
+const pname = (t, id) => t.people.find((p) => p.id === id)?.name || '—';
+function splitView(t) {
+  if (t.trav < 2) return '';
+  const items = splitItems(t), st = settle(t), ccys = ['GBP', ...new Set(t.stops.map(ccyOf).filter((c) => c && c !== 'GBP'))];
+  const opts = (sel) => `<option value="">Not paid yet</option>${t.people.map((p) => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}`;
+  return `<div class="label"><span>Split costs</span><span class="r">Activities are paid individually</span></div>
+  <div class="card pad"><div class="people">${t.people.map((p) => `<input class="inp sm" data-person="${p.id}" value="${esc(p.name)}" aria-label="Traveller name">`).join('')}</div></div>
+  <div class="card" style="margin-top:10px">${items.map((it) => `<div class="srow"><span><b>${esc(it.label)}</b><small>${gbp(it.gbp)}${it.ccy && it.ccy !== 'GBP' ? ' · ' + money(it.amt, it.ccy) : ''}${it.kind === 'exp' && it.split.length < t.people.length ? ' · split ' + it.split.map((id) => esc(pname(t, id))).join(', ') : ''}</small></span><select class="inp sm" data-payer="${it.kind}:${esc(it.key)}" aria-label="Paid by">${opts(it.paidBy)}</select>${it.kind === 'exp' ? `<button class="tx" data-delexp="${it.key}" aria-label="Delete">×</button>` : '<span></span>'}</div>`).join('')}
+    <form class="pad" id="expform" style="display:grid;gap:8px;border-top:1px solid var(--line)"><div style="display:flex;gap:8px"><input class="inp" id="expl" placeholder="Other expense, e.g. Dinner in Gion" style="flex:2"><input class="inp" id="expa" inputmode="decimal" placeholder="Amount" style="flex:1"><select class="inp" id="expc" style="width:84px">${ccys.map((c) => `<option>${c}</option>`).join('')}</select></div>
+      <div class="split" style="border:0;padding:0"><select class="inp sm" id="expp" aria-label="Paid by">${t.people.map((p) => `<option value="${p.id}">${esc(p.name)} paid</option>`).join('')}</select>${t.people.map((p) => `<label class="lbl"><input type="checkbox" class="expw" value="${p.id}" checked> ${esc(p.name)}</label>`).join('')}<button class="pill sm go" style="margin-left:auto">Add</button></div></form></div>
+  <div class="label"><span>Settle up</span>${st.unpaid ? `<span class="r">${gbp(st.unpaid)} not paid yet</span>` : ''}</div>
+  <div class="card">${st.moves.length ? st.moves.map((m) => `<div class="pfix"><span><b>${esc(pname(t, m.from))}</b> pays <b>${esc(pname(t, m.to))}</b></span><b style="margin-left:auto">${gbp(m.gbp)}</b></div>`).join('') : `<div class="empty">${items.some((i) => i.paidBy) ? 'Everyone is square.' : 'Set who paid for each booking to see who owes whom.'}</div>`}
+    ${Object.values(st.bal).some((v) => Math.abs(v) > 0.5) ? `<div class="pfix" style="flex-wrap:wrap;gap:6px 14px">${t.people.map((p) => `<span>${esc(p.name)} <b style="color:${st.bal[p.id] >= 0 ? 'var(--ok)' : 'var(--bad)'}">${st.bal[p.id] >= 0 ? '+' : '−'}${gbp(Math.abs(st.bal[p.id]))}</b></span>`).join('')}</div>` : ''}</div>`;
+}
+
+/* ---------------- Points bookings: when award space opens ---------------- */
+const AWARD_DAYS = { avios: 355, hyatt: 365, marriott: 350, hilton: 365, ihg: 350, accor: 404 };
+const AWARD_SITE = { avios: 'https://www.britishairways.com', hyatt: 'https://world.hyatt.com', marriott: 'https://www.marriott.com', hilton: 'https://www.hilton.com', ihg: 'https://www.ihg.com', accor: 'https://all.accor.com' };
+function awardItems(t) {
+  const out = [], dts = legDates(t), dates = stopDates(t);
+  legsOf(t).forEach((l, i) => { if (l.mode !== 'flight' || !dts[i]) return; const av = aviosFor(l.a, l.b, t.cabin, l.peak); out.push({ prog: 'avios', name: `${l.a.city} → ${l.b.city}`, date: dts[i], open: dayAdd(dts[i], -AWARD_DAYS.avios), detail: `${kpts(av.pp * t.trav)} Avios · ${CABINS[av.cabin]}${l.pay === 'avios' ? ' · using Avios' : ''}`, using: l.pay === 'avios' }); });
+  t.stops.forEach((s, i) => { const st = s.stay; if (!st || !AWARD_DAYS[st.prog] || !dates[i]?.in) return; const days = st.prog === 'hyatt' && S.wallet.hyatt?.early ? 395 : AWARD_DAYS[st.prog]; out.push({ prog: st.prog, name: st.name, date: dates[i].in, open: dayAdd(dates[i].in, -days), detail: `${kpts(ptsFor(st) * s.nights * (s.rooms || t.rooms || 1))} pts for ${s.nights} night${s.nights === 1 ? '' : 's'}${st.pay === 'points' ? ' · using points' : ''}`, using: st.pay === 'points' }); });
+  return out;
+}
+function awardView(t) {
+  const items = awardItems(t); if (!items.length) return '';
+  const today = todayISO(), have = new Set(t.notes.reminders.map((r) => r.text));
+  return `<div class="label"><span>Points bookings</span><span class="r">When award space opens</span></div>
+  <div class="card">${items.sort((x, y) => x.open.localeCompare(y.open)).map((x) => { const open = x.open <= today, txt = `Book ${x.name} with ${x.prog === 'avios' ? 'Avios' : PROGS[x.prog].name.split(' ')[0] + ' points'} (opens today)`;
+    return `<div class="srow aw"><span>${x.prog === 'avios' ? '<span class="av">AV</span>' : logo(x.prog)}<span><b>${esc(x.name)}</b><small>${esc(x.detail)}</small><small class="${open ? 'okt' : ''}">${open ? 'Open now — check availability' : 'Opens ' + fmtD(x.open, true)}</small></span></span>
+      ${open ? `<a class="pill sm" href="${AWARD_SITE[x.prog]}" target="_blank" rel="noopener">Check ↗</a>` : have.has(txt) ? '<span class="src ok">Reminder set</span>' : `<button class="pill sm" data-addrem="${esc(txt)}" data-due="${x.open}">Remind me</button>`}</div>`; }).join('')}
+  <p class="note" style="padding:0 14px 12px;margin:0">Booking windows: BA 355 days; Hyatt 12 months (13 for Explorist, Globalist and cardholders); Marriott 50 weeks; Hilton up to a year; IHG 350 days; Accor 404 days. Live award availability isn't available to the planner, so check on each programme's site.</p></div>`;
 }
 
 /* ---------------- Budget view ---------------- */
@@ -1275,6 +1348,8 @@ function budgetView(t) {
   ${budgetBar(t, tot, false)}${ptsChips(t, tot)}
   <div class="label"><span>Bookings</span><span class="r">${gbp(tot.booked)} booked · ${gbp(tot.legCash + tot.stayCash - tot.booked)} to go</span></div>
   <div class="card">${tot.toBook.length ? tot.toBook.map((x) => `<button class="trow" ${x.kind === 'leg' ? `data-leg="${esc(x.k)}"` : `data-open="${x.id}" data-st="stay"`}><span><b>${esc(x.name)}</b><small>Not booked yet</small></span><span style="font-weight:650">${gbp(x.cash)}</span></button>`).join('') : '<div class="empty">Everything is booked. 🎉</div>'}</div>
+  ${awardView(t)}
+  ${splitView(t)}
   <div class="label"><span>By stop</span><span class="r">${gbp(tot.cash / Math.max(1, t.trav))} per person</span></div>
   <div class="card"><table class="tbl"><thead><tr><th>Stop</th><th>Travel in</th><th>Stay</th><th>To do</th><th>Total</th></tr></thead><tbody>${rows}${back ? `<tr><td>Home</td><td>${gbp(bc)}</td><td>–</td><td>–</td><td><b>${gbp(bc)}</b></td></tr>` : ''}</tbody>
   <tfoot><tr><td>Trip</td><td>${gbp(tot.legCash)}</td><td>${gbp(tot.stayCash)}</td><td>${gbp(tot.todoCash)}</td><td>${gbp(tot.cash)}</td></tr></tfoot></table></div>
@@ -1549,7 +1624,7 @@ async function liveHotels(sid, stars) {
     if (t.hotelCap && V.capOnly) input.max_price_per_night = Math.round(t.hotelCap / FX);
     const p = payloadOf(await mcp.callTool('SlickTrip', 'search_hotels', input));
     if (p?.status && p.status !== 'ok') throw new Error(p.message || p.error || 'SlickTrip: ' + p.status);
-    V.live[sid] = { at: Date.now(), url: p.search_url, stars, list: (p.hotels || []).map((h) => ({ name: h.name, cash: h.per_night_gbp ?? h.per_night ?? 0, stars: h.stars, rating: h.guest_rating, reviews: h.reviews, url: h.hotel_url, prog: progOf(h.name) })) };
+    V.live[sid] = { at: Date.now(), url: p.search_url, key: p.search?.search_key, stars, list: (p.hotels || []).map((h) => ({ name: h.name, hid: h.hotel_id, cash: h.per_night_gbp ?? h.per_night ?? 0, stars: h.stars, rating: h.guest_rating, reviews: h.reviews, url: h.hotel_url, prog: progOf(h.name) })) };
   } catch (e) { V.err['h' + sid] = mcpErr(e); }
   V.busy['h' + sid] = false; renderSheet();
 }
@@ -1577,6 +1652,38 @@ function flightTimes(f) {
   const days = Math.round((new Date(m[1][1]) - new Date(m[0][1])) / 864e5);
   return { num, dep: m[0][2], arr: m[1][2], arrDay: Math.max(0, Math.min(2, days)) };
 }
+
+/* ---------------- Rooms ---------------- */
+const ROOM_TIERS = [['Standard room', 1], ['Superior / larger room', 1.2], ['Deluxe or club room', 1.5], ['Suite', 2.4]];
+const baseCash = (st) => st.baseCash || st.cash;
+async function liveRooms(s) {
+  const st = s.stay; if (!st?.sk || !st?.hid || !mcp) return;
+  V.busy['r' + s.id] = true; V.err['r' + s.id] = ''; renderSheet();
+  try {
+    const p = payloadOf(await mcp.callTool('SlickTrip', 'hotel_details', { search_key: st.sk, hotel_id: st.hid, currency: 'GBP' }));
+    if (p?.status && p.status !== 'ok') throw new Error(p.message || 'SlickTrip: ' + p.status);
+    const seen = new Set(), rooms = (p.rooms || []).map((r) => ({ name: r.name, cash: r.per_night_gbp ?? 0, total: r.total_gbp ?? 0, refundable: !!r.free_cancellation, seller: r.seller, direct: !!r.hotel_direct }))
+      .filter((r) => { const k = keyOf(r.name) + r.cash; if (seen.has(k) || !r.cash) return false; seen.add(k); return true; }).sort((x, y) => x.cash - y.cash).slice(0, 14);
+    V.rooms[s.id] = { rooms, checkin: p.check_in_time || '', checkout: p.check_out_time || '', address: p.address || '' };
+    if (p.address) st.address = p.address; if (p.check_in_time) { st.checkin = p.check_in_time; st.checkout = p.check_out_time; } save();
+  } catch (e) { V.err['r' + s.id] = mcpErr(e); }
+  V.busy['r' + s.id] = false; renderSheet();
+}
+function roomPane(t, s) {
+  const st = s.stay; if (!st) return '';
+  const lr = V.rooms[s.id], base = baseCash(st), cur = st.room?.name || 'Standard room';
+  const pick = (r, key, est) => `<button class="hrow ${st.room?.key === key ? 'on' : ''}" data-room="${esc(key)}"><div style="min-width:0"><div class="n">${esc(r.name)}</div><div class="m">${est ? '<span class="src">est</span>' : `${r.refundable ? '<span class="src ok">Free cancellation</span>' : '<span class="src">Non-refundable</span>'} ${esc(r.seller || '')}${r.direct ? ' · direct' : ''}`}</div></div><div class="p">${gbp(r.cash)}<small>per night</small></div></button>`;
+  return `<div class="label"><span>Room</span><span class="r">${esc(cur)}${st.room?.refundable ? ' · free cancellation' : ''}${st.room?.breakfast ? ' · breakfast' : ''}</span></div>
+  ${st.checkin || st.address ? `<p class="note" style="margin:-4px 0 8px">${st.checkin ? `Check-in ${esc(st.checkin)} · check-out ${esc(st.checkout || '')}` : ''}${st.address ? `${st.checkin ? '<br>' : ''}${esc(st.address)}` : ''}</p>` : ''}
+  ${st.sk && st.hid && mcp ? `<div class="cta" style="margin:0 0 10px"><button class="pill sm ${lr ? 'on' : ''}" data-act="roomrates" ${V.busy['r' + s.id] ? 'disabled' : ''}>${lr ? 'Refresh room rates' : 'Room rates for your dates'}</button></div>` : ''}
+  ${V.busy['r' + s.id] ? '<div class="busy">Getting room rates…</div>' : ''}${V.err['r' + s.id] ? `<div class="err">${esc(V.err['r' + s.id])}</div>` : ''}
+  <div class="card">${lr ? `<div class="hgroup"><span>Live · per room</span><span>${lr.rooms.length} options</span></div>${lr.rooms.map((r, j) => pick(r, 'l' + j + ':' + r.name, false)).join('') || '<div class="empty">No room-level rates for these dates.</div>'}<div class="hgroup"><span>Or estimate</span></div>` : ''}
+    ${ROOM_TIERS.map(([n, m], j) => pick({ name: n, cash: Math.round(base * m / 5) * 5 }, 't' + j, true)).join('')}
+    <form class="pad" id="roomform" style="display:grid;gap:8px;border-top:1px solid var(--line)"><div class="grid2"><input class="inp" id="rmname" placeholder="Your room, e.g. King Deluxe" value="${esc(st.room?.custom ? st.room.name : '')}"><input class="inp" id="rmcash" inputmode="decimal" placeholder="£ per night" value="${st.room?.custom ? Math.round(st.cash) : ''}"></div>
+      <div class="split" style="border:0;padding:0"><label class="lbl"><input type="checkbox" id="rmref" ${st.room?.refundable ? 'checked' : ''}> Free cancellation</label><label class="lbl"><input type="checkbox" id="rmbf" ${st.room?.breakfast ? 'checked' : ''}> Breakfast</label><button class="pill sm go" style="margin-left:auto">Use my rate</button></div></form></div>
+  ${st.pay === 'points' && st.room && !/^standard/i.test(st.room.name) ? '<p class="note">Points prices here are for a standard room. Upgraded rooms usually cost more points.</p>' : ''}`;
+}
+function setRoom(s, room) { const st = s.stay; if (!st.baseCash) st.baseCash = st.cash; st.room = room; st.cash = room.cash; save(); }
 
 /* ---------------- Photos ---------------- */
 async function addPhoto(file) {
@@ -1696,7 +1803,7 @@ function stayPane(t, s, d) {
   if (st) {
     const isP = PROGS[st.prog], pts = ptsFor(st), val = isP && pts ? (st.cash * 100 / pts) : 0;
     stay = `<div class="stay">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="min-width:0"><div class="hn">${esc(st.name)}</div><div class="hm">${esc(st.hood || s.hood || '')}${st.stars ? ` · ${st.stars}★` : ''}${st.rating ? ` · ${st.rating}/5` : ''} · <span class="src ${st.src === 'live' ? 'live' : st.src === 'claude' ? 'claude' : ''}">${st.src === 'live' ? 'live rate' : st.src === 'claude' ? 'Claude' : 'typical'}</span>${cap && st.cash > cap && st.pay !== 'points' ? ' <span class="src bad">over cap</span>' : ''}</div></div>${logo(st.prog)}</div>
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="min-width:0"><div class="hn">${esc(st.name)}</div><div class="hm">${st.room ? esc(st.room.name) + ' · ' : ''}${esc(st.hood || s.hood || '')}${st.stars ? ` · ${st.stars}★` : ''}${st.rating ? ` · ${st.rating}/5` : ''} · <span class="src ${st.src === 'live' ? 'live' : st.src === 'claude' ? 'claude' : ''}">${st.src === 'live' ? 'live rate' : st.src === 'claude' ? 'Claude' : 'typical'}</span>${cap && st.cash > cap && st.pay !== 'points' ? ' <span class="src bad">over cap</span>' : ''}</div></div>${logo(st.prog)}</div>
       ${isP ? `<div><span class="seg"><button class="${st.pay !== 'points' ? 'on' : ''}" data-pay="cash">Pay cash</button><button class="${st.pay === 'points' ? 'on' : ''}" data-pay="points">Use points</button></span>${st.pay === 'points' ? ` <span class="lbl" style="margin-left:6px">${val.toFixed(2)}p per point</span>` : ''}</div>` : ''}
       <div class="split">
         <span class="step"><button data-act="srooms" data-d="-1" aria-label="Fewer rooms">−</button><b>${c.rooms}</b><button data-act="srooms" data-d="1" aria-label="More rooms">+</button></span><span>room${c.rooms === 1 ? '' : 's'}</span>
@@ -1709,6 +1816,7 @@ function stayPane(t, s, d) {
       <div class="split" style="border-top:1px dashed var(--line2)"><button class="tog ${st.booked ? 'on' : ''}" data-act="staybooked"><i></i>Booked</button><input class="inp sm" id="stayref" value="${esc(st.ref || '')}" placeholder="Confirmation number" autocapitalize="characters" style="flex:1;min-width:140px"></div>${isP && st.pay !== 'points' && c.earn ? `<div class="hm" style="margin-top:2px">Earns about <b>${kpts(c.earn)}</b> ${esc(PROGS[st.prog].name)} points</div>` : ''}</div>`;
   }
   const lv = V.live[s.id];
+  const rooms = roomPane(t, s);
   const row = (h, key, live) => { const on = st && st.name === h.name, over = cap && h.cash > cap, pts = PROGS[h.prog] ? ptsFor(h) : 0;
     if (over && V.capOnly && !on) return '';
     return `<button class="hrow ${on ? 'on' : ''} ${over ? 'over' : ''}" data-hotel="${key}"><div style="min-width:0"><div class="n">${esc(h.name)}</div><div class="m">${logo(h.prog)}${live ? `${h.stars ? h.stars + '★' : ''}${h.rating ? ` · ${h.rating}/5` : ''}` : esc(h.hood || '')}${pts ? ` · ~${kpts(pts)} pts` : ''}${over ? ` · <span class="src bad">+${gbp(h.cash - cap)}</span>` : ''}</div></div><div class="p">${gbp(h.cash)}<small>${live ? 'live' : 'typical'} / night</small></div></button>`; };
@@ -1718,6 +1826,7 @@ function stayPane(t, s, d) {
   ${s.hoods.length ? `<div class="hoods">${hoods}</div>` : `<div class="card empty">${canAI() ? 'No guide yet. Research it with Claude for neighbourhoods and hotels.' : 'No guide for this city yet.'}</div>`}
   <div class="label"><span>Your stay</span>${st ? '<button class="pill sm" data-act="nostay">Clear</button>' : ''}</div>
   <div class="card">${stay}</div>
+  ${rooms}
   <div class="label"><span>Hotels${s.hood ? ' in ' + esc(s.hood) : ''}</span>${cap ? `<button class="tog ${V.capOnly ? 'on' : ''}" data-act="caponly"><i></i>Under ${gbp(cap)}</button>` : `<button class="pill sm ghost" data-tab="budget">Set a nightly cap</button>`}</div>
   ${mcp ? `<div class="cta" style="margin:-2px 0 10px"><button class="pill sm ${lv && !lv.stars ? 'on' : ''}" data-live="0" ${V.busy['h' + s.id] ? 'disabled' : ''}>Live prices for your dates</button><button class="pill sm ${lv?.stars === 4 ? 'on' : ''}" data-live="4" ${V.busy['h' + s.id] ? 'disabled' : ''}>Live · 4★+</button></div>` : ''}
   ${V.busy['h' + s.id] ? `<div class="busy">Checking rates on SlickTrip…</div>` : ''}${V.err['h' + s.id] ? `<div class="err">${esc(V.err['h' + s.id])}</div>` : ''}
@@ -1877,6 +1986,7 @@ function walletSheet() {
   <div class="label"><span>Airline</span></div><div class="card">${row('avios', 'British Airways Avios', '<span class="avl">AVIOS</span>')}</div>
   <div class="label"><span>Hotels</span></div>
   <div class="card">${Object.entries(PROGS).map(([k, p]) => row(k, p.name, `<img src="${p.logo}" alt="${esc(p.name)}">`)).join('')}</div>
+  <label class="lbl" style="margin-top:12px"><input type="checkbox" id="hyattearly" ${S.wallet.hyatt?.early ? 'checked' : ''}> Hyatt Explorist, Globalist or Hyatt cardholder (13-month award window)</label>
   <p class="note">Guide hotels show typical standard-room points. For live rates, points are estimated from the cash price and your value per point.</p>`;
 }
 async function buildTrip(D) {
@@ -1914,6 +2024,7 @@ document.addEventListener('click', (e) => {
   if (d.stab) { V.stab = d.stab; V.day = null; return renderSheet(); }
   if (d.day) { V.day = d.day === 'all' ? null : +d.day; return renderSheet(); }
   if (d.uns != null && S_) { const p = (PH.cache[keyOf(cityQ(S_))] || [])[+d.uns]; if (p) { S_.cover = p; usePhoto(p); save(); renderSheet(); renderMain(); } return; }
+  if (d.delexp) { t.expenses = t.expenses.filter((x) => x.id !== d.delexp); save(); return renderMain(); }
   if (d.addrem != null) { t.notes.reminders.push({ id: uid(), text: d.addrem, due: d.due || '', done: false }); save(); renderMain(); return toast('Reminder added'); }
   if (d.remdone) { const r = t.notes.reminders.find((x) => x.id === d.remdone); if (r) { r.done = !r.done; save(); renderMain(); } return; }
   if (d.delrem) { t.notes.reminders = t.notes.reminders.filter((x) => x.id !== d.delrem); save(); return renderMain(); }
@@ -1924,7 +2035,13 @@ document.addEventListener('click', (e) => {
   if (d.keep && S_) { const x = S_.todos.find((y) => y.id === d.keep); if (x) { x.keep = !x.keep; if (x.keep && S_.days) { const j = S_.days.reduce((bi, day, i, a) => day.length < a[bi].length ? i : bi, 0); S_.days[j].push(x.id); } save(); renderSheet(); } return; }
   if (d.filter) { V.filter = d.filter; return renderSheet(); }
   if (d.pay && S_?.stay) { S_.stay.pay = d.pay; save(); return renderSheet(); }
-  if (d.hotel && S_) { const live = d.hotel[0] === 'l', j = +d.hotel.slice(1); const h = live ? V.live[S_.id]?.list[j] : S_.hotels[j]; if (h) { S_.stay = { name: h.name, hood: live ? S_.hood : h.hood, prog: h.prog, cash: h.cash, points: live ? 0 : h.points, stars: h.stars, rating: h.rating, url: h.url, pay: S_.stay?.pay === 'points' && PROGS[h.prog] ? 'points' : 'cash', src: live ? 'live' : (S_.src === 'claude' ? 'claude' : 'guide') }; if (!live && h.hood) S_.hood = h.hood; save(); renderSheet(); toast(`Staying at ${h.name}`); } return; }
+  if (d.room && S_?.stay) {
+    const key = d.room, st = S_.stay;
+    if (key[0] === 'l') { const r = V.rooms[S_.id]?.rooms[+key.slice(1, key.indexOf(':'))]; if (r) setRoom(S_, { key, name: r.name, cash: r.cash, refundable: r.refundable, seller: r.seller }); }
+    else { const [n, m] = ROOM_TIERS[+key.slice(1)]; setRoom(S_, { key, name: n, cash: Math.round(baseCash(st) * m / 5) * 5, est: true }); }
+    renderSheet(); return toast('Room updated');
+  }
+  if (d.hotel && S_) { const live = d.hotel[0] === 'l', j = +d.hotel.slice(1); const h = live ? V.live[S_.id]?.list[j] : S_.hotels[j]; if (h) { S_.stay = { name: h.name, hood: live ? S_.hood : h.hood, prog: h.prog, cash: h.cash, points: live ? 0 : h.points, stars: h.stars, rating: h.rating, url: h.url, pay: S_.stay?.pay === 'points' && PROGS[h.prog] ? 'points' : 'cash', src: live ? 'live' : (S_.src === 'claude' ? 'claude' : 'guide'), ...(live ? { sk: V.live[S_.id]?.key, hid: h.hid } : {}) }; if (!live && h.hood) S_.hood = h.hood; save(); renderSheet(); toast(`Staying at ${h.name}`); } return; }
   if (d.live != null && S_) return liveHotels(S_.id, +d.live || 0);
   if (d.mode) { const l = legsOf(t).find((x) => x.k === V.sheet.id); t.legs[l.k] = { mode: d.mode, ...estLeg(l.a, l.b, d.mode, t), src: 'est', pay: 'cash' }; save(); return renderSheet(); }
   if (d.legpay || d.peak != null) { const l = legsOf(t).find((x) => x.k === V.sheet.id); const { a, b: bb, i, k, ...rest } = l; t.legs[l.k] = { ...rest, ...(d.legpay ? { pay: d.legpay } : { peak: d.peak === '1' }) }; save(); return renderSheet(); }
@@ -1939,7 +2056,7 @@ document.addEventListener('click', (e) => {
     case 'play': if (V.play) { V.play = null; renderMain(); return fitMap(true); } return playRoute();
     case 'zin': return d3.select('#map').transition().duration(300).call(M.zoom.scaleBy, 2);
     case 'zout': return d3.select('#map').transition().duration(300).call(M.zoom.scaleBy, 0.5);
-    case 'trav': { const was = t.trav; t.trav = Math.max(1, Math.min(9, t.trav + +d.d)); Object.values(t.legs).forEach((l) => { if (l.src === 'est' || l.src === 'claude') l.price = r5(l.price / was * t.trav); }); if (t.rooms < Math.ceil(t.trav / 4)) t.rooms = Math.ceil(t.trav / 4); save(); return renderMain(); }
+    case 'trav': { const was = t.trav; t.trav = Math.max(1, Math.min(9, t.trav + +d.d)); migrate(); Object.values(t.legs).forEach((l) => { if (l.src === 'est' || l.src === 'claude') l.price = r5(l.price / was * t.trav); }); if (t.rooms < Math.ceil(t.trav / 4)) t.rooms = Math.ceil(t.trav / 4); save(); return renderMain(); }
     case 'rooms': t.rooms = Math.max(1, Math.min(9, t.rooms + +d.d)); save(); return renderMain();
     case 'srooms': if (S_) { S_.rooms = Math.max(1, Math.min(9, (S_.rooms || t.rooms) + +d.d)); save(); renderSheet(); } return;
     case 'share': if (S_) { S_.share = Math.max(t.trav, Math.min(20, (S_.share || t.trav) + +d.d)); save(); renderSheet(); } return;
@@ -1974,6 +2091,7 @@ document.addEventListener('click', (e) => {
     case 'preview': V.preview = t.start; V.tab = 'today'; renderMain(); return scrollTo(0, 0);
     case 'pvoff': V.preview = null; V.tab = inTrip(t) ? 'today' : 'plan'; return renderMain();
     case 'entry': V.busy.entry = true; renderMain(); checkEntry(t).then(() => { V.busy.entry = false; save(); renderMain(); }, (e) => { V.busy.entry = false; toast(claudeErr(e, 'Could not check entry rules')); renderMain(); }); return;
+    case 'roomrates': if (S_) liveRooms(S_); return;
     case 'fxopen': V.fxOpen = V.fxOpen === S_?.id ? null : S_?.id; return renderSheet();
     case 'fxclaude': V.busy.fx = true; renderSheet(); fxFromClaude(t).then(() => { V.busy.fx = false; renderSheet(); }, (e) => { V.busy.fx = false; toast(claudeErr(e, 'No rates came back')); renderSheet(); }); return;
     case 'climate': { const s = S_; if (!s) return; V.busy.wx = true; renderSheet(); climateFromClaude(s, t).then(() => { V.busy.wx = false; save(); renderSheet(); }, (e) => { V.busy.wx = false; toast(claudeErr(e, 'No weather came back')); renderSheet(); }); return; }
@@ -2006,6 +2124,7 @@ document.addEventListener('input', (e) => {
   if (el.id === 'tname') { T().name = el.value || 'Untitled trip'; save(); }
   if (el.dataset.w) { const [k, f] = el.dataset.w.split('.'); S.wallet[k][f] = num(el.value); save(); }
   if (el.dataset.tset && el.tagName === 'INPUT') { T()[el.dataset.tset] = num(el.value); save(); }
+  if (el.dataset.person) { const p = T().people.find((x) => x.id === el.dataset.person); if (p) { p.name = el.value || 'Traveller'; save(); } }
   if (el.id === 'tripnote') { T().notes.text = el.value; save(); }
   if (el.id === 'stopnote') { const s = T().stops.find((x) => x.id === V.sheet?.id); if (s) { s.note = el.value; save(); } }
   if (el.id === 'fxl' || el.id === 'fxg') { const r = fxRate(el.dataset.ccy), v = num(el.value), other = $(el.id === 'fxl' ? '#fxg' : '#fxl'); if (r && other) other.value = el.value === '' ? '' : el.id === 'fxl' ? (v / r).toFixed(2) : (v * r >= 100 ? Math.round(v * r) : (v * r).toFixed(2)); }
@@ -2017,6 +2136,13 @@ document.addEventListener('change', (e) => {
   if (el.id === 'start') { t.start = el.value; save(); renderMain(); }
   if (el.id === 'photoin') addPhoto(el.files?.[0]);
   if (el.id === 'docin') addDoc(el.files?.[0]);
+  if (el.dataset.person) renderMain();
+  if (el.dataset.payer) { const [kind, key] = [el.dataset.payer.slice(0, el.dataset.payer.indexOf(':')), el.dataset.payer.slice(el.dataset.payer.indexOf(':') + 1)];
+    if (kind === 'leg') { const l = legsOf(t).find((x) => x.k === key); if (l) { const { a, b: bb, i, k, ...rest } = l; t.legs[key] = { ...rest, paidBy: el.value }; } }
+    else if (kind === 'stay') { const s = t.stops.find((x) => x.id === key); if (s?.stay) s.stay.paidBy = el.value; }
+    else { const x = t.expenses.find((y) => y.id === key); if (x) x.paidBy = el.value; }
+    save(); renderMain(); }
+  if (el.id === 'hyattearly') { S.wallet.hyatt.early = el.checked; save(); }
   if (el.id === 'doclink') V.docLink = el.value;
   if (el.id === 'nat') { t.notes.nat = el.value; save(); renderMain(); }
   if (el.id === 'pvdate' && el.value) { V.preview = el.value; renderMain(); }
@@ -2039,6 +2165,14 @@ document.addEventListener('submit', (e) => {
   e.preventDefault(); const t = T();
   if (e.target.id === 'todoform') { const s = t.stops.find((x) => x.id === V.sheet?.id), v = $('#todoq').value.trim(); if (s && v) { const x = { id: uid(), name: v, hood: s.hood, type: '', hours: 1.5, cost: 0, keep: true, custom: true, lat: null, lng: null }; s.todos.unshift(x); if (s.days) s.days[0].push(x.id); save(); renderSheet(); } }
   if (e.target.id === 'legform') { const k = V.sheet.id, l = legsOf(t).find((x) => x.k === k); const [hh, mm] = $('#lgt').value.split(':'); const time = (+hh || 0) * 60 + (+mm || 0); const { a, b, i, k: kk, ...rest } = l; t.legs[k] = { ...rest, time: time || l.time, price: num($('#lgp').value), note: $('#lgn').value.trim(), num: $('#lgnum').value.trim().toUpperCase(), ref: $('#lgref').value.trim().toUpperCase(), dep: $('#lgdep').value, arr: $('#lgarr').value, arrDay: +$('#lgday').value || 0, src: rest.src === 'live' ? 'live' : 'custom' }; save(); renderSheet(); toast('Saved'); }
+  if (e.target.id === 'expform') {
+    const label = $('#expl').value.trim(), amt = num($('#expa').value), ccy = $('#expc').value, r = ccy === 'GBP' ? 1 : fxRate(ccy);
+    if (!label || !amt) return toast('Add a description and an amount');
+    if (!r) return toast('No exchange rate for ' + ccy + ' yet');
+    const split = [...document.querySelectorAll('.expw:checked')].map((x) => x.value);
+    t.expenses.push({ id: uid(), label, amt, ccy, gbp: amt / r, paidBy: $('#expp').value, split: split.length ? split : t.people.map((p) => p.id) }); save(); renderMain(); return;
+  }
+  if (e.target.id === 'roomform') { const s = t.stops.find((x) => x.id === V.sheet?.id), c = num($('#rmcash').value); if (s?.stay && c) { setRoom(s, { key: 'custom', custom: true, name: $('#rmname').value.trim() || 'My room', cash: c, refundable: $('#rmref').checked, breakfast: $('#rmbf').checked }); renderSheet(); toast('Your rate saved'); } return; }
   if (e.target.id === 'remform') { const v = $('#remq').value.trim(); if (v) { t.notes.reminders.push({ id: uid(), text: v, due: $('#remd').value || '', done: false }); save(); renderMain(); } return; }
   if (e.target.id === 'syncform') {
     const code = $('#syncq').value.trim().toUpperCase().replace(/\s+/g, '');

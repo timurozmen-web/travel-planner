@@ -690,6 +690,7 @@ function pickStay(s, t, cap) {
   s.stay = { ...best, pay: 'cash', src: s.src === 'claude' ? 'claude' : 'guide' };
   if (best.hood) s.hood = best.hood;
 }
+function freshDraft(h) { return { name: '', home: h ? { name: h.city, country: h.country, lat: h.lat, lng: h.lng, code: h.code } : null, dests: [], start: dayAdd(new Date().toISOString().slice(0, 10), 60), nights: 3, trav: 2, rooms: 1, budget: 0, cabin: 'economy' }; }
 function demoTrip() {
   const t = { id: uid(), name: 'Japan & Korea', start: '2027-03-08', trav: 2, rooms: 1, ret: true, cabin: 'economy', budget: 12000, hotelCap: 0, actCap: 0, legs: {}, stops: [] };
   S.trips.push(t); S.cur = t.id;
@@ -962,7 +963,7 @@ async function pullSync(force) {
     if (!r.ok) { saveState = 'offline'; return 'error'; }
     const d = await r.json();
     if (force || d.at > localAt()) {
-      const j = JSON.parse(d.json); if (j.trips?.length) Object.assign(S, j);
+      const j = JSON.parse(d.json); if (Array.isArray(j.trips)) Object.assign(S, j);
       if (d.packs) { try { S.packs = { ...JSON.parse(d.packs), ...S.packs }; } catch {} }
       migrate(); setLocalAt(d.at); try { localStorage.setItem(LS, serial()); } catch {}
       saveState = 'cloud'; M.sig = ''; if (!V.play && !DR) refresh(); return 'pulled';
@@ -1087,7 +1088,7 @@ async function boot() {
   const sid = new URLSearchParams(location.search).get('trip');
   if (sid) return bootShared(sid);
   loadLocal();
-  if (!S.trips.length) demoTrip();
+  if (!S.trips.length) V.draft = freshDraft();
   migrate(); if (T()?.start && todayISO() >= T().start && todayISO() <= tripEnd(T())) V.tab = 'today'; render();
   const use = window.claude?.use ? (n) => window.claude.use(n).catch(() => null) : async () => null;
   if (!window.claude?.use) probeWeb();
@@ -1117,7 +1118,7 @@ const tripEnd = (t) => dayAdd(t.start, t.stops.reduce((a, s) => a + s.nights, 0)
 const inTrip = (t, iso = todayISO()) => t.start && iso >= dayAdd(t.start, -7) && iso <= dayAdd(tripEnd(t), 1);
 function tabList(t) { return [...(V.preview || inTrip(t) ? [['today', 'Today']] : []), ['route', 'Route'], ['plan', 'Plan'], ['budget', 'Budget'], ...(V.ro ? [] : [['notes', 'Notes']])]; }
 function renderMain() {
-  const t = T(); if (!t) return;
+  const t = T(); if (!t) { $('#main').innerHTML = welcomeView(); return; }
   if (!tabList(t).some(([k]) => k === V.tab)) V.tab = 'route';
   const tab = V.tab;
   let html = `<header class="top">
@@ -1592,7 +1593,7 @@ async function cities() {
 async function suggest(q, box, act) {
   const raw = q; q = keyOf(q); if (!q) { box.innerHTML = ''; return; }
   const list = await cities();
-  const near = V.sheet?.k === 'new' ? new Set([V.draft?.home?.country, ...V.draft.dests.map((c) => c.country)]) : new Set([T()?.home?.country, ...(T()?.stops || []).map((s) => s.country)]);
+  const near = V.sheet?.k === 'new' || (!T() && V.draft) ? new Set([V.draft?.home?.country, ...V.draft.dests.map((c) => c.country)]) : new Set([T()?.home?.country, ...(T()?.stops || []).map((s) => s.country)]);
   const rank = (c) => (c.guide ? 0 : 4) + (keyOf(c.name) === q ? 0 : 2) + (near.has(c.country) ? 0 : 1) + (POPULAR.has(c.country) ? 0 : 1) - Math.log10((c.pop || 1000) + 1) * 0.8;
   const hits = list.filter((c) => keyOf(c.name).startsWith(q)).sort((a, b) => rank(a) - rank(b))
     .concat(list.filter((c) => !keyOf(c.name).startsWith(q) && keyOf(c.name).includes(q)).sort((a, b) => (b.pop || 0) - (a.pop || 0))).slice(0, 8);
@@ -2008,10 +2009,20 @@ function homeSheet() {
   return `${head()}<div class="stitle">Starting from</div><div class="ssub">${esc(t.home.city)}, ${esc(t.home.country)}</div>
   <div class="addbox"><div class="addrow"><input class="inp" id="homeq" placeholder="Change home city…" autocomplete="off"></div><div class="sugg" id="homesugg"></div></div>`;
 }
+const redraft = () => V.sheet?.k === 'new' ? renderSheet() : renderMain();
 function newSheet() {
+  return `${head()}<div class="stitle">Plan a new trip</div><div class="ssub">Where, when, who, and how much. You can change everything later.</div>${newForm()}`;
+}
+function welcomeView() {
+  V.draft ??= freshDraft();
+  return `<header class="top"><div style="min-width:0"><div class="eyebrow">Journeys planner</div><h1>Where to next?</h1><p class="ssub" style="margin-top:6px">Start from a blank trip. Add where you're going and the planner builds the route, stays and things to do.</p></div>
+    <div class="hb">${webSync ? '<button class="pill" data-act="sync">Sync</button>' : ''}<button class="pill" data-act="wallet">Wallet</button></div></header>
+  ${newForm()}
+  ${webSync && !syncCode() ? '<p class="note" style="text-align:center">Planned trips on another device? <button class="lnk" data-act="sync">Sync them here</button></p>' : ''}`;
+}
+function newForm() {
   const D = V.draft;
-  return `${head()}<div class="stitle">Plan a new trip</div><div class="ssub">Where, when, who, and how much. You can change everything later.</div>
-  <form id="newform">
+  return `<form id="newform">
   <div class="label"><span>Trip</span></div>
   <div class="card pad" style="display:grid;gap:12px">
     <label class="field"><span>Name</span><input class="inp" id="nname" value="${esc(D.name)}" placeholder="e.g. Italy in May"></label>
@@ -2048,7 +2059,7 @@ function tripsSheet() {
   <div class="card pad"><p class="note" style="margin:0 0 10px">Copy your trips here, then paste them into the planner in Claude or on the website.</p>
     <div class="cta" style="margin-top:0"><button class="pill" data-act="export">Copy all trips</button></div>
     <form id="importform" style="margin-top:12px;display:grid;gap:8px"><textarea class="inp" id="importq" rows="3" placeholder="Paste trips copied from the other version" style="font-size:13px;resize:vertical"></textarea><div><button class="pill go">Import</button></div></form></div>
-  <div class="cta"><button class="pill" data-act="dup">Duplicate this trip</button>${S.trips.length > 1 ? (V.confirm === 'deltrip' ? `<button class="pill go" data-act="deltrip">Delete “${esc(t.name)}”</button><button class="pill" data-act="noconfirm">Cancel</button>` : `<button class="pill" data-act="askdeltrip">Delete this trip</button>`) : ''}</div>`;
+  <div class="cta"><button class="pill" data-act="dup">Duplicate this trip</button>${S.trips.length ? (V.confirm === 'deltrip' ? `<button class="pill go" data-act="deltrip">Delete “${esc(t.name)}”</button><button class="pill" data-act="noconfirm">Cancel</button>` : `<button class="pill" data-act="askdeltrip">Delete this trip</button>`) : ''}</div>`;
 }
 function compareSheet() {
   const A = S.trips.find((x) => x.id === V.cmp?.a) || T(), B = S.trips.find((x) => x.id === V.cmp?.b) || S.trips.find((x) => x !== A) || A;
@@ -2116,7 +2127,7 @@ function syncSheet() {
   ${V.err.sync ? `<div class="err">${esc(V.err.sync)}</div>` : ''}`;
 }
 function walletSheet() {
-  const t = T(), tot = totals(t);
+  const t = T(), tot = t ? totals(t) : { pts: {}, earn: {} };
   const row = (k, name, lg) => { const w = S.wallet[k], need = tot.pts[k] || 0; return `<div class="prog">${lg}<div><div class="pn"><span>${esc(name)}</span><small>${need ? `this trip ${kpts(need)}` : tot.earn[k] ? `earn +${kpts(tot.earn[k])}` : ''}</small></div><div class="grid3">
     <label class="field"><span>Balance</span><input class="inp sm" style="width:100%" inputmode="numeric" data-w="${k}.bal" value="${w.bal || ''}" placeholder="0"></label>
     <label class="field"><span>Value p</span><input class="inp sm" style="width:100%" inputmode="decimal" data-w="${k}.ppp" value="${w.ppp}"></label>
@@ -2156,9 +2167,9 @@ document.addEventListener('click', (e) => {
   if (d.leg) return openLeg(d.leg);
   if (d.pick) { const c = JSON.parse(d.pick); $('#addq').value = ''; $('#addsugg').innerHTML = ''; return addCity(c); }
   if (d.home) { const c = JSON.parse(d.home); const h = makeStop(c.name, { ...c, nights: 0 }); h.id = 'home'; t.home = h; Object.keys(t.legs).forEach((k) => { if (k.startsWith('home>') || k.endsWith('>ret')) delete t.legs[k]; }); save(); M.sig = ''; return closeSheet(); }
-  if (d.nhome) { V.draft.home = JSON.parse(d.nhome); return renderSheet(); }
-  if (d.ndest) { V.draft.dests.push(JSON.parse(d.ndest)); renderSheet(); return setTimeout(() => $('#ndest')?.focus(), 30); }
-  if (d.ndel != null) { syncDraft(); V.draft.dests.splice(+d.ndel, 1); return renderSheet(); }
+  if (d.nhome) { V.draft.home = JSON.parse(d.nhome); return redraft(); }
+  if (d.ndest) { V.draft.dests.push(JSON.parse(d.ndest)); redraft(); return setTimeout(() => $('#ndest')?.focus(), 30); }
+  if (d.ndel != null) { syncDraft(); V.draft.dests.splice(+d.ndel, 1); return redraft(); }
   if (d.trip) { S.cur = d.trip; save(); M.sig = ''; return closeSheet(); }
   if (d.stab) { V.stab = d.stab; V.day = null; return renderSheet(); }
   if (d.day) { V.day = d.day === 'all' ? null : +d.day; return renderSheet(); }
@@ -2218,10 +2229,10 @@ document.addEventListener('click', (e) => {
     case 'noconfirm': V.confirm = null; return renderSheet();
     case 'delstop': if (S_) { t.stops = t.stops.filter((x) => x !== S_); save(); toast(`Removed ${S_.city}`); closeSheet(); } return;
     case 'ideas': return stopovers(V.sheet.id);
-    case 'newtrip': V.draft = { name: '', home: t.home ? { name: t.home.city, country: t.home.country, lat: t.home.lat, lng: t.home.lng, code: t.home.code } : null, dests: [], start: dayAdd(new Date().toISOString().slice(0, 10), 60), nights: 3, trav: 2, rooms: 1, budget: 0, cabin: 'economy' }; return openSheet({ k: 'new' });
+    case 'newtrip': V.draft = freshDraft(t?.home); return openSheet({ k: 'new' });
     case 'dup': { const c = JSON.parse(JSON.stringify(t)); c.id = uid(); c.name = t.name + ' (copy)'; S.trips.unshift(c); S.cur = c.id; save(); return renderSheet(); }
     case 'askdeltrip': V.confirm = 'deltrip'; return renderSheet();
-    case 'deltrip': S.trips = S.trips.filter((x) => x.id !== t.id); S.cur = S.trips[0]?.id; save(); M.sig = ''; return closeSheet();
+    case 'deltrip': S.trips = S.trips.filter((x) => x.id !== t.id); S.cur = S.trips[0]?.id; if (!S.trips.length) { V.draft = freshDraft(t.home); V.tab = 'route'; } save(); M.sig = ''; return closeSheet();
     case 'legbooked': { const l = legsOf(t).find((x) => x.k === V.sheet.id); if (l) { const { a, b: bb, i, k, ...rest } = l; t.legs[l.k] = { ...rest, booked: !l.booked }; save(); renderSheet(); } return; }
     case 'staybooked': if (S_?.stay) { S_.stay.booked = !S_.stay.booked; save(); renderSheet(); } return;
     case 'cal': V.err.share = ''; return openSheet({ k: 'cal' });

@@ -933,7 +933,16 @@ const setSyncCode = (c) => { try { c ? localStorage.setItem(SK, c) : localStorag
 const localAt = () => { try { return +(localStorage.getItem(LS + '-at') || 0); } catch { return 0; } };
 const setLocalAt = (n) => { try { localStorage.setItem(LS + '-at', String(n)); } catch {} };
 function newCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(20)); return [...r].map((b, i) => A[b % A.length] + (i % 5 === 4 && i < 19 ? '-' : '')).join(''); }
-function serial() { return JSON.stringify({ trips: S.trips, cur: S.cur, wallet: S.wallet }); }
+function serial() { return JSON.stringify({ trips: S.trips, cur: S.cur, wallet: S.wallet, demoCleared: true }); }
+// The planner used to start with a sample "Japan & Korea" trip. Saved data from then still has it (and any variants made from it), so drop it once.
+const DEMO_CITIES = new Set(['Tokyo', 'Kyoto', 'Osaka', 'Seoul', 'Hakone']);
+const isDemo = (t) => /^Japan & Korea\b/.test(t?.name || '') && (t.stops || []).every((x) => DEMO_CITIES.has(x.city));
+let demoDropped = false;
+function adopt(j) {
+  if (!j || !Array.isArray(j.trips)) return j;
+  if (!j.demoCleared) { const n = j.trips.length; j.trips = j.trips.filter((t) => !isDemo(t)); if (j.trips.length !== n) { demoDropped = true; if (!j.trips.some((t) => t.id === j.cur)) j.cur = j.trips[0]?.id; } j.demoCleared = true; }
+  return j;
+}
 function save() {
   if (V.ro) return;
   updateShareSoon(T());
@@ -963,9 +972,9 @@ async function pullSync(force) {
     if (!r.ok) { saveState = 'offline'; return 'error'; }
     const d = await r.json();
     if (force || d.at > localAt()) {
-      const j = JSON.parse(d.json); if (Array.isArray(j.trips)) Object.assign(S, j);
+      const j = adopt(JSON.parse(d.json)); if (Array.isArray(j.trips)) Object.assign(S, j);
       if (d.packs) { try { S.packs = { ...JSON.parse(d.packs), ...S.packs }; } catch {} }
-      migrate(); setLocalAt(d.at); try { localStorage.setItem(LS, serial()); } catch {}
+      migrate(); setLocalAt(d.at); try { localStorage.setItem(LS, serial()); } catch {} if (demoDropped) save();
       saveState = 'cloud'; M.sig = ''; if (!V.play && !DR) refresh(); return 'pulled';
     }
     if (d.at < localAt()) await pushSync(); else saveState = 'cloud';
@@ -973,7 +982,7 @@ async function pullSync(force) {
   } catch { saveState = 'offline'; return 'error'; }
 }
 function loadLocal() {
-  try { const j = JSON.parse(localStorage.getItem(LS) || 'null'); if (j && j.trips?.length) Object.assign(S, j); } catch {}
+  try { const j = adopt(JSON.parse(localStorage.getItem(LS) || 'null')); if (j && Array.isArray(j.trips)) Object.assign(S, j); } catch {}
   try { S.packs = JSON.parse(localStorage.getItem(LS + '-packs') || '{}') || {}; } catch { S.packs = {}; }
 }
 const docData = (snap) => { if (!snap) return null; if (typeof snap.data === 'function') return snap.exists === false ? null : snap.data(); return snap; };
@@ -1041,7 +1050,8 @@ function saveSharedCopy() {
   const shared = T(); let local = {};
   try { local = JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch {}
   const c = JSON.parse(JSON.stringify(shared)); c.id = uid(); delete c.share;
-  local.trips = [c, ...(local.trips || [])]; local.cur = c.id;
+  local.trips ??= []; adopt(local);
+  local.trips = [c, ...local.trips]; local.cur = c.id;
   try {
     localStorage.setItem(LS, JSON.stringify(local));
     const packs = JSON.parse(localStorage.getItem(LS + '-packs') || '{}') || {};
@@ -1089,6 +1099,7 @@ async function boot() {
   if (sid) return bootShared(sid);
   loadLocal();
   if (!S.trips.length) V.draft = freshDraft();
+  if (demoDropped) save();
   migrate(); if (T()?.start && todayISO() >= T().start && todayISO() <= tripEnd(T())) V.tab = 'today'; render();
   const use = window.claude?.use ? (n) => window.claude.use(n).catch(() => null) : async () => null;
   if (!window.claude?.use) probeWeb();
@@ -1103,8 +1114,8 @@ async function boot() {
       const [a, b] = await Promise.race([Promise.all([dbRef.doc('planner').get(), dbRef.doc('packs').get()]), timer]);
       const pa = docData(a), pb = docData(b);
       if (pb?.json) S.packs = { ...JSON.parse(pb.json), ...S.packs };
-      if (pa?.json) { const j = JSON.parse(pa.json); if (j.trips?.length) Object.assign(S, j); }
-      migrate(); saveState = 'synced'; if (!pa?.json) save();
+      if (pa?.json) { const j = adopt(JSON.parse(pa.json)); if (Array.isArray(j.trips) && (j.trips.length || demoDropped)) Object.assign(S, j); }
+      migrate(); saveState = 'synced'; if (!pa?.json || demoDropped) save();
       if (!V.play) refresh();
     } catch { saveState = 'local'; }
   }
